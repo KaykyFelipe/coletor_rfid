@@ -5,7 +5,6 @@
  */
 
 #include "main.h"
-#include "flag_brazil.h"
 
 /*********************
  *      ESP32
@@ -123,8 +122,6 @@ extern void freertos_main(void);
 
 #define INACTIVE_POWEROFF_MILLISECONDS 600000UL
 static uint64_t millis_before, millis_now;
-static uint8_t frame = 0;
-static uint64_t flag_millis = 0, frame_duration = 100;
 static uint64_t heartbeat_millis = 0, heartbeat_duration = 1000;
 static uint64_t poweroff_millis = 0;
 static uint64_t battery_millis = 0;
@@ -132,7 +129,6 @@ static uint64_t antenna_millis = 0;
 static uint64_t wifi_millis = 0;
 static uint64_t bluetooth_millis = 0;
 static lv_style_t display_style;
-static lv_image_dsc_t flag_frame;
 static lv_obj_t *battery_symbol, *wifi_symbol, *ble_symbol, *screen_battery_label;
 static bool wifi_connected = false, ble_connected = false;
 static std::vector<STRING> assets;
@@ -320,16 +316,10 @@ int main(int argc, char **argv){
 
   #if LV_USE_OS == LV_OS_NONE
 
-  // Background
-    flag_millis = millis();
-    flag_frame.header.w = flag_brazil_width;
-    flag_frame.header.h = flag_brazil_height;
-    flag_frame.header.cf = LV_COLOR_FORMAT_RGB565;
-    flag_frame.data_size = sizeof(flag_brazil[0]) * 2;
-    flag_frame.data = (const uint8_t*)&flag_brazil[frame++];
-
+  // Background: plain white
     lv_style_init(&display_style);
-    lv_style_set_bg_img_src(&display_style, &flag_frame);
+    lv_style_set_bg_color(&display_style, lv_color_white());
+    lv_style_set_bg_opa(&display_style, LV_OPA_COVER);
     lv_obj_add_style(screen, &display_style, 0);
     lv_timer_handler();
 
@@ -361,30 +351,13 @@ int main(int argc, char **argv){
   #endif // LV_USE_OS
 }
 
-static void update_frame() {
-  // PRINTF("[%d] wave the flag\n", flag_millis);
-  PRINTF("w");
-  // The wind waves the flag
-  if (frame == FLAG_BRAZIL_FRAMES) {
-    frame = 0;
-    frame_duration = 100;
-  }
-  else if (frame > 18) {
-    frame_duration = frame_duration == 100 ? 101 : frame_duration == 101 ? 102 : 2000;
-  }
-  frame += frame_duration == 2000 ? 1 : frame > 18 ? -frame : 1;
-  /*lavatorio-portatil-500x600px-04|Sem-Titulo-1|toalete-standard-600x750px-07|carretinha-toaletes-portateis-01-600x500px|toalete-luxo-500x600px-03|toalete-portatil-pcd-600x500px-02|lavatorio-portatil-500x600px-01|bilheteria-galvanizado-2|container-almoxarifado-galvanizado-600x500px-06|container-banheiro-compacto-500x600px-03|container-banheiro-galvanizado-500x600px-01|container-banheiro-luxo-isotermico-500x600px-02|container-banheiro-luxo-isotermico-500x600px-01|container-habitavel-alojamento-isotermico-600x500px-02|container-habitavel-escritorio-isotermico-1200x800px-03|container-habitavel-projetos-especiais-600x500px-011*/
-  flag_frame.data = (const uint8_t*)&flag_brazil[frame == FLAG_BRAZIL_FRAMES ? FLAG_BRAZIL_FRAMES - 1: frame];
-  lv_obj_invalidate(screen);
-}
-
 static void verify_inactivity() {
-  if (flag_millis - poweroff_millis > INACTIVE_POWEROFF_MILLISECONDS) {
+  if (millis_now - poweroff_millis > INACTIVE_POWEROFF_MILLISECONDS) {
     #ifdef ESP32
       esp_sleep_enable_timer_wakeup(35e6); // sleep for 5 min
       esp_deep_sleep_start();
     #else
-      PRINTF("exit: %d | %d | %d | %d\n", flag_millis, poweroff_millis, flag_millis - poweroff_millis, INACTIVE_POWEROFF_MILLISECONDS);
+      PRINTF("exit: %d | %d | %d | %d\n", millis_now, poweroff_millis, millis_now - poweroff_millis, INACTIVE_POWEROFF_MILLISECONDS);
       exit(0);
     #endif // ESP32
   }
@@ -434,14 +407,6 @@ void loop() {
   /* Periodically call the lv_task handler.
    * It could be done in a timer interrupt or an OS task too.*/
   update_interface();
-
-  // ~ 100 ms for flag frames and 2 s for others frames
-  if (millis_now - flag_millis > frame_duration) {
-    // PRINTF("frame_duration: %llu\n", frame_duration);
-    PRINTF("f");
-    flag_millis = millis_now;
-    update_frame();
-  }
 
   // Heartbeat
   if (millis_now - heartbeat_millis > heartbeat_duration) {
