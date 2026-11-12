@@ -5,6 +5,7 @@
  */
 
 #include "main.h"
+#include "src/ble/ble.h"
 #include "src/buttons/buttons.h"
 #include "src/display/display.h"
 #include "src/state/app.h"
@@ -144,7 +145,8 @@ static float battery_factor = 2. * 3.75 / 3.8;  // resistors diff, ideal 2.
 static adc_oneshot_unit_handle_t adc2_handle;
 static adc_cali_handle_t adc_cali;
 
-static BleKeyboard ble_keyboard;
+// Teclado HID + servico GATT proprio, criados em src/ble/ble.cpp
+static BleKeyboard &ble_keyboard = ble_keyboard_instance();
 
 static char buffer[1024] = {'\0'};
 static size_t len_buffer = 0;

@@ -127,7 +127,8 @@ void display_show(display_screen_t which, const char *text, int count) {
     case DISPLAY_READ_OK:
       title_font = font_for_name(text ? text : "");
       lv_label_set_text(title_label, text ? text : "");
-      lv_label_set_text(subtitle_label, LV_SYMBOL_OK " Leitura feita");
+      if (count > 0) lv_label_set_text_fmt(subtitle_label, LV_SYMBOL_OK " Leitura feita  #%d", count);
+      else lv_label_set_text(subtitle_label, LV_SYMBOL_OK " Leitura feita");
       subtitle_color = COLOR_GREEN;
       subtitle_font = &lv_font_montserrat_16;
       has_subtitle = true;
@@ -142,6 +143,16 @@ void display_show(display_screen_t which, const char *text, int count) {
       lv_label_set_text_fmt(title_label, count == 1 ? "%d guardada" : "%d guardadas", count);
       lv_label_set_text(subtitle_label, "Pode continuar lendo.\nEnvia sozinho ao reconectar.");
       has_subtitle = true;
+      break;
+
+    case DISPLAY_SENDING:
+      title_font = &lv_font_montserrat_32;
+      lv_label_set_text(title_label, "Enviando...");
+      break;
+
+    case DISPLAY_MESSAGE:
+      title_font = font_for_name(text ? text : "");
+      lv_label_set_text(title_label, text ? text : "");
       break;
   }
 
