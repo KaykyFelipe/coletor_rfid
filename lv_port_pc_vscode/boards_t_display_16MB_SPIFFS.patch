@@ -1,0 +1,15 @@
+--- boards.txt	2025-08-12 07:08:24.266290343 -0300
++++ boards_t_display_16MB_SPIFFS.txt	2025-08-11 08:20:36.939375420 -0300
+@@ -5948,6 +5948,12 @@
+ lilygo_t_display.menu.PartitionScheme.app3M_fat9M_16MB=16M Flash (3MB APP/9MB FATFS)
+ lilygo_t_display.menu.PartitionScheme.app3M_fat9M_16MB.build.partitions=app3M_fat9M_16MB
+ lilygo_t_display.menu.PartitionScheme.app3M_fat9M_16MB.upload.maximum_size=3145728
++lilygo_t_display.menu.PartitionScheme.default_16mb=16 MB SPIFFS (6.25MB APP/OTA/3.43MB SPIFFS)
++lilygo_t_display.menu.PartitionScheme.default_16mb.build.partitions=default_16MB
++lilygo_t_display.menu.PartitionScheme.default_16mb.upload.maximum_size=6553600
++lilygo_t_display.menu.PartitionScheme.large_spiffs=16 MB Large SPIFFS (4.5MB APP/OTA/6.93MB SPIFFS)
++lilygo_t_display.menu.PartitionScheme.large_spiffs.build.partitions=large_spiffs_16MB
++lilygo_t_display.menu.PartitionScheme.large_spiffs.upload.maximum_size=4718592
+ 
+ lilygo_t_display.menu.CPUFreq.240=240MHz (WiFi/BT)
+ lilygo_t_display.menu.CPUFreq.240.build.f_cpu=240000000L

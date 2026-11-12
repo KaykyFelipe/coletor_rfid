@@ -1,0 +1,312 @@
+diff --git a/lv_conf.h b/lv_conf.h
+index 5015cb7..201e117 100644
+--- a/lv_conf.h
++++ b/lv_conf.h
+@@ -26,7 +26,7 @@
+  *====================*/
+ 
+ /** Color depth: 1 (I1), 8 (L8), 16 (RGB565), 24 (RGB888), 32 (XRGB8888) */
+-#define LV_COLOR_DEPTH 32
++#define LV_COLOR_DEPTH 16
+ 
+ /*=========================
+    STDLIB WRAPPER SETTINGS
+@@ -39,7 +39,7 @@
+  * - LV_STDLIB_RTTHREAD:    RT-Thread implementation
+  * - LV_STDLIB_CUSTOM:      Implement the functions externally
+  */
+-#define LV_USE_STDLIB_MALLOC    LV_STDLIB_BUILTIN
++#define LV_USE_STDLIB_MALLOC    LV_STDLIB_CLIB
+ 
+ /** Possible values
+  * - LV_STDLIB_BUILTIN:     LVGL's built in implementation
+@@ -48,7 +48,7 @@
+  * - LV_STDLIB_RTTHREAD:    RT-Thread implementation
+  * - LV_STDLIB_CUSTOM:      Implement the functions externally
+  */
+-#define LV_USE_STDLIB_STRING    LV_STDLIB_BUILTIN
++#define LV_USE_STDLIB_STRING    LV_STDLIB_CLIB
+ 
+ /** Possible values
+  * - LV_STDLIB_BUILTIN:     LVGL's built in implementation
+@@ -57,7 +57,7 @@
+  * - LV_STDLIB_RTTHREAD:    RT-Thread implementation
+  * - LV_STDLIB_CUSTOM:      Implement the functions externally
+  */
+-#define LV_USE_STDLIB_SPRINTF   LV_STDLIB_BUILTIN
++#define LV_USE_STDLIB_SPRINTF   LV_STDLIB_CLIB
+ 
+ #define LV_STDINT_INCLUDE       <stdint.h>
+ #define LV_STDDEF_INCLUDE       <stddef.h>
+@@ -68,7 +68,7 @@
+ 
+ #if LV_USE_STDLIB_MALLOC == LV_STDLIB_BUILTIN
+     /** Size of memory available for `lv_malloc()` in bytes (>= 2kB) */
+-    #define LV_MEM_SIZE (1024 * 1024)
++    #define LV_MEM_SIZE (64 * 1024U)
+ 
+     /** Size of the memory expand for `lv_malloc()` in bytes */
+     #define LV_MEM_POOL_EXPAND_SIZE 0
+@@ -153,7 +153,7 @@
+ /** Stack size of drawing thread.
+  * NOTE: If FreeType or ThorVG is enabled, it is recommended to set it to 32KB or more.
+  */
+-#define LV_DRAW_THREAD_STACK_SIZE    (32 * 1024)
++#define LV_DRAW_THREAD_STACK_SIZE    (8 * 1024)         /**< [bytes]*/
+ 
+ /** Thread priority of the drawing task.
+  *  Higher values mean higher priority.
+@@ -224,7 +224,7 @@
+     #endif
+ 
+     /** Enable drawing complex gradients in software: linear at an angle, radial or conical */
+-    #define LV_USE_DRAW_SW_COMPLEX_GRADIENTS    1
++    #define LV_USE_DRAW_SW_COMPLEX_GRADIENTS    0
+ 
+ #endif
+ 
+@@ -331,7 +331,7 @@
+     /** Enable border to simulate shadow.
+      *  NOTE: which usually improves performance,
+      *  but does not guarantee the same rendering quality as the software. */
+-    #define LV_VG_LITE_USE_BOX_SHADOW 1
++    #define LV_VG_LITE_USE_BOX_SHADOW 0
+ 
+     /** VG-Lite gradient maximum cache number.
+      *  @note  The memory usage of a single gradient image is 4K bytes. */
+@@ -433,9 +433,9 @@
+  * If LV_USE_LOG is enabled, an error message will be printed on failure. */
+ #define LV_USE_ASSERT_NULL          1   /**< Check if the parameter is NULL. (Very fast, recommended) */
+ #define LV_USE_ASSERT_MALLOC        1   /**< Checks is the memory is successfully allocated or no. (Very fast, recommended) */
+-#define LV_USE_ASSERT_STYLE         1
+-#define LV_USE_ASSERT_MEM_INTEGRITY 1
+-#define LV_USE_ASSERT_OBJ           1
++#define LV_USE_ASSERT_STYLE         0
++#define LV_USE_ASSERT_MEM_INTEGRITY 0
++#define LV_USE_ASSERT_OBJ           0
+ 
+ /** Add a custom handler when assert happens e.g. to restart MCU. */
+ #define LV_ASSERT_HANDLER_INCLUDE <stdint.h>
+@@ -491,7 +491,7 @@
+ #define LV_COLOR_MIX_ROUND_OFS  0
+ 
+ /** Add 2 x 32-bit variables to each `lv_obj_t` to speed up getting style properties */
+-#define LV_OBJ_STYLE_CACHE      1
++#define LV_OBJ_STYLE_CACHE      0
+ 
+ /** Add `id` field to `lv_obj_t` */
+ #define LV_USE_OBJ_ID           0
+@@ -588,13 +588,14 @@
+ #define LV_ATTRIBUTE_EXTERN_DATA
+ 
+ /** Use `float` as `lv_value_precise_t` */
+-#define LV_USE_FLOAT            1
++#define LV_USE_FLOAT            0
+ 
+ /** Enable matrix support
+  *  - Requires `LV_USE_FLOAT = 1` */
+-#define LV_USE_MATRIX           1
++#define LV_USE_MATRIX           0
+ 
+ /** Include `lvgl_private.h` in `lvgl.h` to access internal data and functions by default */
++#define LV_USE_PRIVATE_API  1
+ #ifndef LV_USE_PRIVATE_API
+     #define LV_USE_PRIVATE_API  0
+ #endif
+@@ -605,8 +606,8 @@
+ 
+ /* Montserrat fonts with ASCII range and some symbols using bpp = 4
+  * https://fonts.google.com/specimen/Montserrat */
+-#define LV_FONT_MONTSERRAT_8  0
+-#define LV_FONT_MONTSERRAT_10 0
++#define LV_FONT_MONTSERRAT_8  1
++#define LV_FONT_MONTSERRAT_10 1
+ #define LV_FONT_MONTSERRAT_12 1
+ #define LV_FONT_MONTSERRAT_14 1
+ #define LV_FONT_MONTSERRAT_16 1
+@@ -628,13 +629,15 @@
+ #define LV_FONT_MONTSERRAT_48 1
+ 
+ /* Demonstrate special features */
+-#define LV_FONT_MONTSERRAT_28_COMPRESSED    1
+-#define LV_FONT_DEJAVU_16_PERSIAN_HEBREW    1
++#define LV_FONT_MONTSERRAT_28_COMPRESSED    0
++#define LV_FONT_DEJAVU_16_PERSIAN_HEBREW    0
++#define LV_FONT_SIMSUN_14_CJK               0  /**< 1000 most common CJK radicals */
++#define LV_FONT_SIMSUN_16_CJK               0
+ #define LV_FONT_SOURCE_HAN_SANS_SC_14_CJK   0  /**< 1338 most common CJK radicals */
+-#define LV_FONT_SOURCE_HAN_SANS_SC_16_CJK   1
++#define LV_FONT_SOURCE_HAN_SANS_SC_16_CJK   0  /**< 1338 most common CJK radicals */
+ 
+ /** Pixel perfect monospaced fonts */
+-#define LV_FONT_UNSCII_8  1
++#define LV_FONT_UNSCII_8  0
+ #define LV_FONT_UNSCII_16 0
+ 
+ /** Optionally declare custom fonts here.
+@@ -777,7 +780,7 @@
+ 
+ #define LV_USE_LIST       1
+ 
+-#define LV_USE_LOTTIE     1
++#define LV_USE_LOTTIE     0
+ 
+ #define LV_USE_MENU       1
+ 
+@@ -864,7 +867,7 @@
+ #define LV_FS_DEFAULT_DRIVER_LETTER '\0'
+ 
+ /** API for fopen, fread, etc. */
+-#define LV_USE_FS_STDIO 1
++#define LV_USE_FS_STDIO 0
+ #if LV_USE_FS_STDIO
+     #define LV_FS_STDIO_LETTER 'A'
+     #define LV_FS_STDIO_PATH ""         /**< Set the working directory. File/directory paths will be appended to it. */
+@@ -929,17 +932,17 @@
+ #endif
+ 
+ /** LODEPNG decoder library */
+-#define LV_USE_LODEPNG 1
++#define LV_USE_LODEPNG 0
+ 
+ /** PNG decoder(libpng) library */
+ #define LV_USE_LIBPNG 0
+ 
+ /** BMP decoder library */
+-#define LV_USE_BMP 1
++#define LV_USE_BMP 0
+ 
+ /** JPG + split JPG decoder library.
+  *  Split JPG is a custom format optimized for embedded systems. */
+-#define LV_USE_TJPGD 1
++#define LV_USE_TJPGD 0
+ 
+ /** libjpeg-turbo decoder library.
+  *  - Supports complete JPEG specifications and high-performance JPEG decoding. */
+@@ -954,16 +957,16 @@
+ 
+ 
+ /** Decode bin images to RAM */
+-#define LV_BIN_DECODER_RAM_LOAD 1
++#define LV_BIN_DECODER_RAM_LOAD 0
+ 
+ /** RLE decompress library */
+-#define LV_USE_RLE 1
++#define LV_USE_RLE 0
+ 
+ /** QR code library */
+-#define LV_USE_QRCODE 1
++#define LV_USE_QRCODE 0
+ 
+ /** Barcode code library */
+-#define LV_USE_BARCODE 1
++#define LV_USE_BARCODE 0
+ 
+ /** FreeType library */
+ #define LV_USE_FREETYPE 0
+@@ -977,7 +980,7 @@
+ #endif
+ 
+ /** Built-in TTF decoder */
+-#define LV_USE_TINY_TTF 1
++#define LV_USE_TINY_TTF 0
+ #if LV_USE_TINY_TTF
+     /* Enable loading TTF data from files */
+     #define LV_TINY_TTF_FILE_SUPPORT 0
+@@ -993,16 +996,16 @@
+ 
+ /** Enable Vector Graphic APIs
+  *  - Requires `LV_USE_MATRIX = 1` */
+-#define LV_USE_VECTOR_GRAPHIC  1
++#define LV_USE_VECTOR_GRAPHIC  0
+ 
+ /** Enable ThorVG (vector graphics library) from the src/libs folder */
+-#define LV_USE_THORVG_INTERNAL 1 
++#define LV_USE_THORVG_INTERNAL 0
+ 
+ /** Enable ThorVG by assuming that its installed and linked to the project */
+ #define LV_USE_THORVG_EXTERNAL 0
+ 
+ /** Use lvgl built-in LZ4 lib */
+-#define LV_USE_LZ4_INTERNAL  1
++#define LV_USE_LZ4_INTERNAL  0
+ 
+ /** Use external LZ4 library */
+ #define LV_USE_LZ4_EXTERNAL  0
+@@ -1034,7 +1037,7 @@
+ #define LV_USE_SNAPSHOT 0
+ 
+ /** 1: Enable system monitor component */
+-#define LV_USE_SYSMON   1
++#define LV_USE_SYSMON   0
+ #if LV_USE_SYSMON
+     /** Get the idle percentage. E.g. uint32_t my_get_idle(void); */
+     #define LV_SYSMON_GET_IDLE lv_os_get_idle_percent
+@@ -1044,7 +1047,7 @@
+         /** Get the applications idle percentage.
+          * - Requires `LV_USE_OS == LV_OS_PTHREAD` */
+         #define LV_SYSMON_GET_PROC_IDLE lv_os_get_proc_idle_percent
+-    #endif 
++    #endif
+ 
+     /** 1: Show CPU usage and FPS count.
+      *  - Requires `LV_USE_SYSMON = 1` */
+@@ -1135,7 +1138,7 @@
+ #define LV_USE_FRAGMENT 0
+ 
+ /** 1: Support using images as font in label or span widgets */
+-#define LV_USE_IMGFONT 1
++#define LV_USE_IMGFONT 0
+ 
+ /** 1: Enable an observer pattern implementation */
+ #define LV_USE_OBSERVER 1
+@@ -1201,7 +1204,11 @@
+  *==================*/
+ 
+ /** Use SDL to open window on PC and handle mouse and keyboard. */
++#ifdef ESP32
++#define LV_USE_SDL              0
++#else
+ #define LV_USE_SDL              1
++#endif  // ESP32
+ #if LV_USE_SDL
+     #define LV_SDL_INCLUDE_PATH     <SDL2/SDL.h>
+     #define LV_SDL_RENDER_MODE      LV_DISPLAY_RENDER_MODE_DIRECT   /**< LV_DISPLAY_RENDER_MODE_DIRECT is recommended for best performance */
+@@ -1298,7 +1305,11 @@
+ #endif
+ 
+ /** Interface for TFT_eSPI */
++#ifdef ESP32
++#define LV_USE_TFT_ESPI         1
++#else
+ #define LV_USE_TFT_ESPI         0
++#endif // ESP32
+ 
+ /** Driver for evdev input devices */
+ #define LV_USE_EVDEV    0
+@@ -1319,7 +1330,11 @@
+ 
+ /* Drivers for LCD devices connected via SPI/parallel port */
+ #define LV_USE_ST7735        0
++#ifdef ESP32
++#define LV_USE_ST7789        1
++#else
+ #define LV_USE_ST7789        0
++#endif  // ESP32
+ #define LV_USE_ST7796        0
+ #define LV_USE_ILI9341       0
+ #define LV_USE_FT81X         0
+@@ -1370,11 +1385,10 @@
+ *======================*/
+ 
+ /** Enable examples to be built with the library. */
+-#define LV_BUILD_EXAMPLES 1
++#define LV_BUILD_EXAMPLES 0
+ 
+ /** Build the demos */
+-#define LV_BUILD_DEMOS 1
+-
++#define LV_BUILD_DEMOS 0
+ /*===================
+  * DEMO USAGE
+  ====================*/

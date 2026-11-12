@@ -1,0 +1,20 @@
+--- platform.txt	2025-08-12 07:18:32.453427925 -0300
++++ platform_ccache_and_rtos.txt	2025-07-29 07:51:28.672218029 -0300
+@@ -25,7 +25,7 @@
+ tools.gen_insights_pkg.cmd.windows="{runtime.platform.path}\tools\gen_insights_package.exe"
+ 
+ compiler.path={tools.{build.tarch}-esp-elf-gcc.path}/bin/
+-compiler.prefix={build.tarch}-{build.target}-elf-
++compiler.prefix=ccache-{build.tarch}-{build.target}-elf-
+ 
+ compiler.sdk.path={tools.esp32-arduino-libs.path}/{build.mcu}
+ compiler.sdk.path.windows={tools.esp32-arduino-libs.path}\{build.mcu}
+@@ -48,7 +48,7 @@
+ compiler.common_werror_flags=-Werror=return-type
+ 
+ # Compile Flags
+-compiler.cpreprocessor.flags="@{compiler.sdk.path}/flags/defines" "-I{build.source.path}" -iprefix "{compiler.sdk.path}/include/" "@{compiler.sdk.path}/flags/includes" "-I{compiler.sdk.path}/{build.memory_type}/include"
++compiler.cpreprocessor.flags="@{compiler.sdk.path}/flags/defines" "-I{build.source.path}" -iprefix "{compiler.sdk.path}/include/" "@{compiler.sdk.path}/flags/includes" "-I{compiler.sdk.path}/{build.memory_type}/include" "-I{compiler.sdk.path}/include/soc/esp32/include" "-I{compiler.sdk.path}/include/freertos/FreeRTOS-Kernel/include"
+ compiler.c.flags=-MMD -c "@{compiler.sdk.path}/flags/c_flags" {compiler.warning_flags} {compiler.optimization_flags} {compiler.common_werror_flags}
+ compiler.cpp.flags=-MMD -c "@{compiler.sdk.path}/flags/cpp_flags" {compiler.warning_flags} {compiler.optimization_flags} {compiler.common_werror_flags}
+ compiler.S.flags=-MMD -c -x assembler-with-cpp "@{compiler.sdk.path}/flags/S_flags" {compiler.warning_flags} {compiler.optimization_flags}

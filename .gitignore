@@ -1,0 +1,23 @@
+# Saidas de compilacao (firmware ESP32 e simulador)
+build/
+build_sim/
+bin/
+bin_backup/
+
+# Arquivos gerados pelo CMake dentro da pasta de fontes
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+build.ninja
+.ninja_deps
+.ninja_log
+compile_commands.json
+
+# Objetos e binarios
+*.o
+*.obj
+*.d
+*.a
+*.exe
+*.elf
+*.map

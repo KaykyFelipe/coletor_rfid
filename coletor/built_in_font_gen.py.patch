@@ -1,0 +1,20 @@
+--- ./lvgl/scripts/built_in_font/built_in_font_gen.py	2025-10-21 19:02:37.776380900 -0300
++++ built_in_font_gen.py	2025-10-17 09:57:01.000000000 -0300
+@@ -20,7 +20,7 @@
+ parser.add_argument('-r', '--range',
+ 					nargs='+',
+ 					metavar = 'start-end',
+-					default=['0x20-0x7F,0xB0,0x2022'],
++					default=['0x20-0xFF,0x2022'],
+ 					help='Ranges and/or characters to include. Default is 0x20-7F (ASCII). E.g. -r 0x20-0x7F, 0x200, 324')
+ parser.add_argument('--symbols',
+ 					nargs='+',
+@@ -30,7 +30,7 @@
+ parser.add_argument('--font',
+ 					metavar = 'file',
+ 					nargs='?',
+-					default='Montserrat-Medium.ttf',
++					default='Montserrat-Bold.ttf',
+ 					help='A TTF or WOFF file')
+ parser.add_argument('-o', '--output',
+ 					nargs='?',

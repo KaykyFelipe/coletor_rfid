@@ -1,0 +1,43 @@
+diff --git a/simulator.code-workspace b/simulator.code-workspace
+index 9226f9d..c923e51 100644
+--- a/simulator.code-workspace
++++ b/simulator.code-workspace
+@@ -35,14 +35,20 @@
+ 		"tasks": [
+ 			{
+ 				"label": "Build",
+-				"command": "cmake",
++				"command": "C:/msys64/usr/bin/bash.exe",
++				"options": {
++					"env": {
++						"MSYSTEM": "UCRT64",
++						"CHERE_INVOKING": "1",
++						"MSYS2_PATH_TYPE": "inherit"
++					}
++				},
+ 				"args": [
+-					"--build", "${command:cmake.buildDirectory}"
++					"-l",
++					"-c",
++					"sed -i 's/ucrt64\\/bin\\/g/usr\\/lib\\/ccache\\/g/' build/CMakeCache.txt; time cmake --build ${command:cmake.buildDirectory} --parallel 20"
+ 				],
+-				"group": {
+-					"kind": "build",
+-					"isDefault": true
+-				},
++				"group": "build",
+ 				"problemMatcher": {
+ 					"owner": "cpp",
+ 					"fileLocation": ["relative", "${workspaceFolder}"],
+@@ -59,9 +65,9 @@
+ 			{
+ 				"label": "Build and Run",
+ 				"type": "shell",
+-				"command": "${workspaceFolder}/bin/main",
++				"command": "./bin/main",
+ 				"group": {
+-					"kind": "test",
++					"kind": "build",
+ 					"isDefault": true
+ 				},
+ 				"dependsOn": "Build"
