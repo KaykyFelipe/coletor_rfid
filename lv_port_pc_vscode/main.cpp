@@ -5,6 +5,9 @@
  */
 
 #include "main.h"
+#include "src/buttons/buttons.h"
+#include "src/display/display.h"
+#include "src/state/app.h"
 
 /*********************
  *      ESP32
@@ -128,13 +131,10 @@ static uint64_t battery_millis = 0;
 static uint64_t antenna_millis = 0;
 static uint64_t wifi_millis = 0;
 static uint64_t bluetooth_millis = 0;
-static lv_style_t display_style;
-static lv_obj_t *battery_symbol, *wifi_symbol, *ble_symbol, *screen_battery_label;
 static bool wifi_connected = false, ble_connected = false;
 static std::vector<STRING> assets;
 
 lv_obj_t *screen, *__no_click;
-void (*hop)();
 
 #ifdef ESP32
 
@@ -308,19 +308,16 @@ int main(int argc, char **argv){
 
 #endif // ESP32
 
-  // Clear screen and recreate the header symbols
-  clear_screen();
+  // Build the fixed top bar and the central area
+  display_init();
+  buttons_init();
+  app_init();
 
   // Register print function for debugging
   lv_log_register_print_cb(log_print);
 
   #if LV_USE_OS == LV_OS_NONE
 
-  // Background: plain white
-    lv_style_init(&display_style);
-    lv_style_set_bg_color(&display_style, lv_color_white());
-    lv_style_set_bg_opa(&display_style, LV_OPA_COVER);
-    lv_obj_add_style(screen, &display_style, 0);
     lv_timer_handler();
 
     millis_before = millis();
@@ -371,24 +368,14 @@ static void update_battery_indicator() {
   float percent = get_battery_percent();
   PRINTF("Battery: %.2f%%\n", percent);
   const char *symbol = percent > 85. ? "\uF240" : percent > 60. ? "\uF241" : percent > 40. ? "\uF242" : percent > 10. ? "\uF243" : "\uF244";
-  lv_label_set_text(battery_symbol, symbol);
-  // lv_obj_invalidate(battery_symbol);
-  if (hop == NULL) {
-    STRING voltage = FLOAT_TO_STRING(get_battery_voltage(), 3) + "V";
-    lv_label_set_text(screen_battery_label, voltage.c_str());
-    lv_obj_align_to(screen_battery_label, screen, LV_ALIGN_TOP_RIGHT, -5, 10);
-  }
+  display_set_battery(percent, symbol);
 }
 
 static void heatbeat() {
   if (heartbeat_duration == 1000 || heartbeat_duration == 332) {
-    if (!wifi_connected) lv_label_set_text(wifi_symbol, "");
-    if (!ble_connected) lv_label_set_text(ble_symbol, "");
     heartbeat_duration = heartbeat_duration == 1000 ? 333 : 335;
   }
   else {
-    if (!wifi_connected) lv_label_set_text(wifi_symbol, "\uF1EB");
-    if (!ble_connected) lv_label_set_text(ble_symbol, "\uF293");
     heartbeat_duration = heartbeat_duration == 333 ? 332 : 1000;
   }
 }
@@ -418,18 +405,15 @@ void loop() {
       update_battery_indicator();
       verify_inactivity();
       ble_connected = ble_keyboard.isConnected();
+      display_set_connected(ble_connected);
     }
 
     heatbeat();
   }
 
-  // Initial screen if all any buttons are pressed
-  if (hop == NULL && (get_button_state(BUTTON_A) == LOW || get_button_state(BUTTON_B) == LOW || get_button_state(BUTTON_C) == LOW)) {
-    hop = initial_hop;
-  }
-
-  else if (hop != NULL)
-    hop();
+  // Buttons (with debounce) and screens
+  buttons_update(millis_now);
+  app_loop(millis_now);
 
   // Wait 5 ms
   delay(5);
@@ -487,37 +471,6 @@ bool wifi_is_connected() {
 
 bool ble_is_connected() {
   return ble_connected;
-}
-
-void clear_screen() {
-  // Clean de the screen
-  lv_obj_clean(screen);
-
-  // Battery symbol
-  battery_symbol = lv_label_create(screen);
-  lv_label_set_text(battery_symbol, "-");
-  lv_obj_align(battery_symbol, LV_ALIGN_TOP_RIGHT, -5, 0);
-  lv_obj_set_flag(battery_symbol, LV_OBJ_FLAG_FLOATING, true);
-
-  // Wi-Fi symbol
-  wifi_symbol = lv_label_create(screen);
-  lv_label_set_text(wifi_symbol, "\uF1EB");
-  lv_obj_align(wifi_symbol, LV_ALIGN_TOP_LEFT, 0, 0);
-  lv_obj_set_flag(wifi_symbol, LV_OBJ_FLAG_FLOATING, true);
-
-  // Bluetooth LE symbol
-  ble_symbol = lv_label_create(screen);
-  lv_label_set_text(ble_symbol, "\uF293");
-  lv_obj_align(ble_symbol, LV_ALIGN_TOP_LEFT, 20, 0);
-  lv_obj_set_flag(ble_symbol, LV_OBJ_FLAG_FLOATING, true);
-
-
-  if (hop == NULL) {
-    // Label to display the current slider value
-    screen_battery_label = lv_label_create(screen);
-    lv_label_set_text(screen_battery_label, "V");
-    lv_obj_align_to(screen_battery_label, screen, LV_ALIGN_TOP_RIGHT, -5, 10);
-  }
 }
 
 void antenna_clear() {

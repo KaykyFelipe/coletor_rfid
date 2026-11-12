@@ -73,7 +73,7 @@ if(USE_FREERTOS)
     list(APPEND MAIN_SOURCES src_hal/freertos_main.c src_hal/freertos/freertos_posix_port.c ${FREERTOS_SOURCES})
     list(APPEND MAIN_LIBS freertos_config freertos_kernel)
 else()
-    list(APPEND MAIN_SOURCES main.cpp bletag.cpp)
+    list(APPEND MAIN_SOURCES main.cpp src/buttons/buttons.cpp src/display/display.cpp src/state/app.cpp)
 endif()
 
 

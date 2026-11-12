@@ -69,8 +69,6 @@ typedef enum {
  **********************/
 
 extern lv_obj_t *screen, *__no_click;
-extern void (*hop)();
-extern void (*initial_hop)();
 
 /**********************
  *  STATIC PROTOTYPES
@@ -91,7 +89,6 @@ bool wifi_is_connected();
 bool ble_is_connected();
 
 void update_interface();
-void clear_screen();
 
 // Read/send data from/to antenna
 STRING antenna_send_command(STRING command);

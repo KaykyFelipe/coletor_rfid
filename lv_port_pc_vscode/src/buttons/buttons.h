@@ -1,0 +1,30 @@
+#ifndef BUTTONS_H
+#define BUTTONS_H
+
+#include "../../main.h"
+
+// Botao principal de leitura RFID: o antigo "Ok" (coletar e descarregar), laranja, GPIO 33.
+#define BUTTON_READ BUTTON_C
+
+// Botoes sem funcao operacional nesta versao, reservados para uso futuro.
+#define BUTTON_SPARE_1 BUTTON_A
+#define BUTTON_SPARE_2 BUTTON_B
+
+#define BUTTONS_COUNT 3
+#define BUTTONS_DEBOUNCE_MS 30
+
+void buttons_init();
+
+// Le os tres botoes e atualiza os eventos. Chamar uma vez por volta do loop.
+void buttons_update(uint64_t now_ms);
+
+// Estado estavel (ja com debounce).
+bool button_is_down(buttons_t button);
+
+// Eventos validos somente ate a proxima chamada de buttons_update().
+bool button_was_pressed(buttons_t button);
+bool button_was_released(buttons_t button);
+
+bool buttons_any_down();
+
+#endif // BUTTONS_H
