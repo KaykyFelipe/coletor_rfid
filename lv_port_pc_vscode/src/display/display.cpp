@@ -99,7 +99,7 @@ void display_init() {
 void display_set_connected(bool connected) {
   lv_obj_set_style_bg_color(status_dot, connected ? COLOR_GREEN : COLOR_AMBER, 0);
   lv_obj_set_style_text_color(status_label, connected ? COLOR_TEXT : COLOR_AMBER, 0);
-  lv_label_set_text(status_label, connected ? "Celular ligado" : "Sem celular");
+  lv_label_set_text(status_label, connected ? "Celular Ligado" : "Sem Celular");
 }
 
 void display_set_battery(float percent, const char *symbol) {
@@ -117,7 +117,7 @@ void display_show(display_screen_t which, const char *text, int count) {
 
   switch (which) {
     case DISPLAY_READY:
-      lv_label_set_text(title_label, "Segure o botão\npara ler");
+      lv_label_set_text(title_label, "Segure A: Tag\nSegure B: Lote");
       if (text) {
         // Aviso das leituras guardadas
         lv_label_set_text(subtitle_label, text);
@@ -134,15 +134,15 @@ void display_show(display_screen_t which, const char *text, int count) {
     case DISPLAY_READ_OK:
       title_font = font_for_name(text ? text : "");
       lv_label_set_text(title_label, text ? text : "");
-      if (count > 0) lv_label_set_text_fmt(subtitle_label, LV_SYMBOL_OK " Leitura feita  #%d", count);
-      else lv_label_set_text(subtitle_label, LV_SYMBOL_OK " Leitura feita");
+      if (count > 0) lv_label_set_text_fmt(subtitle_label, LV_SYMBOL_OK " Leitura Feita  #%d", count);
+      else lv_label_set_text(subtitle_label, LV_SYMBOL_OK " Leitura Feita");
       subtitle_color = COLOR_GREEN;
       subtitle_font = &lv_font_montserrat_16;
       has_subtitle = true;
       break;
 
     case DISPLAY_NO_TAG:
-      lv_label_set_text(title_label, "Nenhuma tag\nencontrada");
+      lv_label_set_text(title_label, "Nenhuma TAG\nEncontrada");
       break;
 
     case DISPLAY_OFFLINE:
@@ -153,14 +153,44 @@ void display_show(display_screen_t which, const char *text, int count) {
       break;
 
     case DISPLAY_SENDING:
-      title_font = &lv_font_montserrat_32;
-      if (count > 0) lv_label_set_text_fmt(title_label, "Enviando %d...", count);
-      else lv_label_set_text(title_label, "Enviando...");
+      lv_label_set_text(title_label, "Enviando\nLeituras...");
+      lv_label_set_text_fmt(subtitle_label, count == 1 ? "%d Pendente" : "%d Pendentes", count);
+      subtitle_color = COLOR_AMBER;
+      subtitle_font = &lv_font_montserrat_16;
+      has_subtitle = true;
       break;
 
     case DISPLAY_MESSAGE:
       title_font = font_for_name(text ? text : "");
       lv_label_set_text(title_label, text ? text : "");
+      break;
+
+    case DISPLAY_DUPLICATE:
+      title_font = &lv_font_montserrat_28;
+      lv_label_set_text(title_label, "Já Registrada");
+      lv_label_set_text(subtitle_label, text ? text : "");
+      subtitle_color = COLOR_AMBER;
+      subtitle_font = &lv_font_montserrat_16;
+      has_subtitle = true;
+      break;
+
+    case DISPLAY_BATCH:
+      title_font = &lv_font_montserrat_32;
+      lv_label_set_text_fmt(title_label, "Lote: %d", count);
+      if (text) {
+        lv_label_set_text(subtitle_label, text);
+        subtitle_color = COLOR_AMBER;
+        subtitle_font = &lv_font_montserrat_16;
+        has_subtitle = true;
+      }
+      break;
+
+    case DISPLAY_CONFIRM:
+      title_font = font_for_name(text ? text : "");
+      lv_label_set_text(title_label, text ? text : "");
+      lv_label_set_text(subtitle_label, "C confirma\nA ou B cancela");
+      subtitle_color = COLOR_AMBER;
+      has_subtitle = true;
       break;
   }
 

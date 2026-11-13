@@ -1,9 +1,12 @@
 #include "rfid.h"
+#include "../storage/storage.h"
 
 #include <regex>
 
 static std::vector<rfid_tag_t> tags;
 static std::vector<rfid_tag_t> reads;
+// Tags vistas neste inventario que ja estavam pendentes na fila (consultada uma vez por tag)
+static std::vector<STRING> duplicates;
 static bool reading = false;
 
 static bool accepted(const STRING &epc) {
@@ -17,6 +20,7 @@ void rfid_init() {
 
 void rfid_start(uint64_t now_ms) {
   tags.clear();
+  duplicates.clear();
   reading = true;
   rfid_backend_start(now_ms);
 }
@@ -39,7 +43,26 @@ void rfid_poll(uint64_t now_ms) {
         break;
       }
     }
-    if (!known) tags.push_back(read);
+    if (known) continue;
+
+    // Controle de duplicidade: tag ainda pendente nao entra no inventario.
+    bool duplicate = false;
+    for (const STRING &epc : duplicates) {
+      if (epc == read.epc) {
+        duplicate = true;
+        break;
+      }
+    }
+    if (duplicate) continue;
+
+    // Repetida: ainda pendente na fila. Depois de descarregada no celular, a
+    // tag sai da fila e pode ser lida de novo.
+    if (storage_has_epc(read.epc.c_str())) {
+      duplicates.push_back(read.epc);
+      continue;
+    }
+
+    tags.push_back(read);
   }
 }
 
@@ -55,6 +78,10 @@ bool rfid_is_reading() {
 
 const std::vector<rfid_tag_t> &rfid_tags() {
   return tags;
+}
+
+const std::vector<STRING> &rfid_duplicates() {
+  return duplicates;
 }
 
 bool rfid_best_tag(rfid_tag_t &best) {

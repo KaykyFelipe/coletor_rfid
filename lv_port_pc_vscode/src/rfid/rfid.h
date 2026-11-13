@@ -22,8 +22,11 @@ void rfid_poll(uint64_t now_ms);
 void rfid_stop();
 bool rfid_is_reading();
 
-// Tags distintas vistas no inventario atual (base para o futuro modo em lote).
+// Tags distintas e ineditas vistas no inventario atual, na ordem em que apareceram.
 const std::vector<rfid_tag_t> &rfid_tags();
+
+// Tags vistas no inventario atual que foram ignoradas por ainda estarem pendentes na fila.
+const std::vector<STRING> &rfid_duplicates();
 
 // Melhor tag do inventario: maior RSSI; se o leitor nao informa RSSI, a mais vezes lida.
 // Devolve false quando nenhuma tag foi vista.

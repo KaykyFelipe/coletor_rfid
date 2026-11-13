@@ -12,7 +12,7 @@ static QueueHandle_t event_queue = NULL;
 static NimBLECharacteristic *reading_chr = NULL;
 static NimBLECharacteristic *status_chr = NULL;
 static volatile bool app_listening = false;
-static uint8_t status_value[3] = {0, 0, 0};
+static uint8_t status_value[5] = {0, 0, 0, 0, 0};
 
 static void copy_text(ble_event_t &event, const uint8_t *data, size_t len) {
   if (len > BLE_TEXT_MAX) len = BLE_TEXT_MAX;
@@ -32,10 +32,11 @@ class CollectorCallbacks : public NimBLECharacteristicCallbacks {
 
     switch (data[0]) {
       case BLE_CMD_ACK:
-        if (len < 3) return;
+        if (len < 4) return;
         event.type = BLE_EVENT_ACK;
         event.seq = (uint16_t)(data[1] | (data[2] << 8));
-        copy_text(event, data + 3, len - 3);
+        event.session = data[3];
+        copy_text(event, data + 4, len - 4);
         break;
 
       case BLE_CMD_TEXT:
@@ -47,6 +48,10 @@ class CollectorCallbacks : public NimBLECharacteristicCallbacks {
         if (len < 5) return;
         event.type = BLE_EVENT_CLOCK;
         event.clock = (uint32_t)data[1] | ((uint32_t)data[2] << 8) | ((uint32_t)data[3] << 16) | ((uint32_t)data[4] << 24);
+        break;
+
+      case BLE_CMD_CLEAR_HISTORY:
+        event.type = BLE_EVENT_CLEAR_HISTORY;
         break;
 
       default:
@@ -101,16 +106,16 @@ bool ble_app_listening() {
   return ble_phone_connected() && app_listening;
 }
 
-bool ble_send_reading(uint16_t seq, const char *epc, int rssi, uint32_t timestamp, bool clock_set) {
+bool ble_send_reading(uint8_t flags, uint16_t seq, const char *epc, int rssi, uint32_t timestamp) {
   // 8 bytes de cabecalho + EPC. Com EPC de ate 12 caracteres cabe em 20 bytes,
-  // o limite de uma notificacao sem negociar MTU.
+  // o limite de uma notificacao sem negociar MTU (por isso a sessao vai em `flags`).
   uint8_t packet[8 + 32];
   size_t epc_len = strlen(epc);
 
   if (reading_chr == NULL || !ble_app_listening()) return false;
   if (epc_len > 32) epc_len = 32;
 
-  packet[0] = clock_set ? BLE_READING_FLAG_CLOCK_SET : 0;
+  packet[0] = flags;
   packet[1] = seq & 0xFF;
   packet[2] = seq >> 8;
   packet[3] = (uint8_t)(int8_t)(rssi < -127 || rssi > 127 ? BLE_RSSI_UNKNOWN : rssi);
@@ -128,8 +133,8 @@ bool ble_poll_event(ble_event_t &event) {
   return xQueueReceive(event_queue, &event, 0) == pdTRUE;
 }
 
-void ble_set_status(uint8_t battery_percent, uint16_t pending) {
-  uint8_t value[3] = {battery_percent, (uint8_t)(pending & 0xFF), (uint8_t)(pending >> 8)};
+void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history) {
+  uint8_t value[5] = {battery_percent, (uint8_t)(pending & 0xFF), (uint8_t)(pending >> 8), (uint8_t)(history & 0xFF), (uint8_t)(history >> 8)};
 
   if (status_chr == NULL || memcmp(value, status_value, sizeof(value)) == 0) return;
   memcpy(status_value, value, sizeof(value));
@@ -141,50 +146,73 @@ void ble_set_status(uint8_t battery_percent, uint16_t pending) {
 
 // Simulador de PC: nao ha Bluetooth. O interruptor "BLE" da janela faz o papel
 // do celular, que confirma cada leitura 400 ms depois com um nome ficticio.
-// Para testar a falta de resposta (2 s), toda leitura de numero multiplo de 3 fica sem confirmacao.
+// Para testar a falta de resposta, toda leitura de numero multiplo de 3 fica sem
+// confirmacao na primeira vez em que e enviada; o reenvio e confirmado.
+// Com a variavel de ambiente SIM_KEYBOARD_ONLY definida, o "celular" tem so o
+// teclado: o aplicativo nunca ouve.
+
+#include <cstdlib>
 
 #define SIM_ACK_DELAY_MS 400
 
-static bool ack_scheduled = false;
-static uint64_t ack_at_ms = 0;
-static uint16_t ack_seq = 0;
+typedef struct {
+  uint64_t at_ms;
+  uint16_t seq;
+  uint8_t session;
+} sim_ack_t;
+
+static std::vector<sim_ack_t> acks;
+static std::vector<uint16_t> refused;  // leituras que ja ficaram sem confirmacao uma vez
 
 bool ble_phone_connected() {
   return ble_is_connected();
 }
 
 bool ble_app_listening() {
-  return ble_is_connected();
+  static const bool keyboard_only = getenv("SIM_KEYBOARD_ONLY") != NULL;
+  return ble_is_connected() && !keyboard_only;
 }
 
-bool ble_send_reading(uint16_t seq, const char *epc, int rssi, uint32_t timestamp, bool clock_set) {
+bool ble_send_reading(uint8_t flags, uint16_t seq, const char *epc, int rssi, uint32_t timestamp) {
+  uint8_t session = flags >> BLE_READING_SESSION_SHIFT;
+  bool refuse = false;
+
   if (!ble_app_listening()) return false;
 
-  PRINTF("BLE SIM: reading seq %u | %s | rssi %d | ts %u | clock %d\n", seq, epc, rssi, (unsigned)timestamp, clock_set);
-  ack_scheduled = (seq % 3) != 0;
-  ack_at_ms = millis() + SIM_ACK_DELAY_MS;
-  ack_seq = seq;
+  if (seq % 3 == 0) {
+    refuse = true;
+    for (uint16_t seen : refused) {
+      if (seen == seq) refuse = false;
+    }
+    if (refuse) refused.push_back(seq);
+  }
+
+  PRINTF("BLE SIM: reading seq %u | session %u | %s | %s | rssi %d | ts %u%s\n", seq, session,
+         flags & BLE_READING_FLAG_BATCH ? "batch" : "single", epc, rssi, (unsigned)timestamp, refuse ? " | NO ACK" : "");
+  if (!refuse) acks.push_back({(uint64_t)millis() + SIM_ACK_DELAY_MS, seq, session});
   return true;
 }
 
 bool ble_poll_event(ble_event_t &event) {
-  if (!ack_scheduled || (uint64_t)millis() < ack_at_ms) return false;
+  if (!ble_is_connected()) acks.clear();  // desconectou: as confirmacoes a caminho se perdem
+  if (acks.empty() || (uint64_t)millis() < acks.front().at_ms) return false;
 
-  ack_scheduled = false;
   memset(&event, 0, sizeof(event));
   event.type = BLE_EVENT_ACK;
-  event.seq = ack_seq;
+  event.seq = acks.front().seq;
+  event.session = acks.front().session;
   strcpy(event.text, "Betoneira 400L");
+  acks.erase(acks.begin());
   return true;
 }
 
-void ble_set_status(uint8_t battery_percent, uint16_t pending) {
-  static int last = -1;
-  int value = battery_percent | (pending << 8);
+void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history) {
+  static long long last = -1;
+  long long value = battery_percent | ((long long)pending << 8) | ((long long)history << 24);
 
   if (value == last) return;
   last = value;
-  PRINTF("BLE SIM: status battery %u%% | pending %u\n", battery_percent, pending);
+  PRINTF("BLE SIM: status battery %u%% | pending %u | history %u\n", battery_percent, pending, history);
 }
 
 #endif // ESP32 / HAL

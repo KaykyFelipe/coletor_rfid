@@ -16,6 +16,8 @@ compile_commands.json
 # Fila de leituras gravada pelo simulador de PC
 collector_queue.*
 collector_seq.bin
+collector_session.bin
+collector_history.*
 
 # Objetos e binarios
 *.o

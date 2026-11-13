@@ -6,23 +6,39 @@
 // Tempo que a tela de resultado fica visivel antes de voltar para "Pronto".
 #define APP_RESULT_MS 3000
 
-// Tempo de espera pela confirmacao do celular antes de mostrar o final da tag.
+// Tempo de espera pela confirmacao do celular para cada leitura transmitida.
 #define APP_ACK_TIMEOUT_MS 2000
 
 // Intervalo de atualizacao da caracteristica de status (bateria e pendentes).
 #define APP_STATUS_MS 5000
 
-// Espera antes de tentar reenviar uma leitura guardada que nao foi confirmada.
-#define APP_FLUSH_RETRY_MS 3000
+// Botoes A e B: segurar por pelo menos este tempo e uma pressao longa (leitura).
+// Soltar antes disso e um clique curto.
+#ifndef APP_LONG_PRESS_MS
+  #define APP_LONG_PRESS_MS 400
+#endif
+
+// Tempo maximo entre soltar o primeiro clique e apertar o segundo para valer
+// como duplo clique (sincronizacao).
+#ifndef APP_DOUBLE_CLICK_MS
+  #define APP_DOUBLE_CLICK_MS 350
+#endif
+
+// Tempo da tela "Preparando envio..." antes de comecar a transmitir.
+#define APP_SYNC_PREPARE_MS 800
+
+// Modos de leitura. Trocar de um para o outro abre uma sessao nova.
+#define APP_MODE_NONE   0
+#define APP_MODE_SINGLE 1  // botao A: uma tag por aperto
+#define APP_MODE_BATCH  2  // botao B: todas as tags ineditas enquanto pressionado
 
 typedef enum {
-  APP_READY,     // aguardando o botao de leitura
+  APP_READY,     // aguardando o botao A ou B
   APP_READING,   // botao pressionado, inventario em andamento
-  APP_SENDING,   // tag enviada, aguardando a confirmacao do celular
-  APP_FLUSH_KEYS,// digitando pelo teclado as leituras guardadas
-  APP_READ_OK,   // tag lida, mostrando o resultado
-  APP_NO_TAG,    // botao solto sem nenhuma tag
-  APP_MESSAGE    // mostrando um texto enviado pelo celular
+  APP_SYNC,      // duplo clique: transmitindo as leituras pendentes de um modo
+  APP_READ_OK,   // leitura feita, mostrando o resultado
+  APP_NO_TAG,    // botao solto sem nenhuma tag inedita
+  APP_MESSAGE    // mostrando um aviso ou um texto enviado pelo celular
 } app_state_t;
 
 void app_init();

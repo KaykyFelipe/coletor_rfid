@@ -4,13 +4,16 @@
 #include "../../main.h"
 
 typedef enum {
-  DISPLAY_READY,     // "Segure o botao para ler"
+  DISPLAY_READY,     // "A: uma tag / B: lote"
   DISPLAY_READING,   // "Lendo..."
   DISPLAY_READ_OK,   // nome do equipamento + "Leitura feita"
   DISPLAY_NO_TAG,    // "Nenhuma tag encontrada"
-  DISPLAY_OFFLINE,   // "N guardadas" + aviso de envio automatico
-  DISPLAY_SENDING,   // "Enviando..." (aguardando a confirmacao do celular)
-  DISPLAY_MESSAGE    // texto livre enviado pelo celular
+  DISPLAY_OFFLINE,   // "N guardadas" (sem uso desde a sincronizacao por duplo clique)
+  DISPLAY_SENDING,   // "Enviando leituras..." + `count` pendentes
+  DISPLAY_MESSAGE,   // texto livre enviado pelo celular
+  DISPLAY_DUPLICATE, // tag ja registrada (so repetidas ao alcance); `text` = final da tag
+  DISPLAY_BATCH,     // modo em lote: `count` tags lidas neste aperto; `text` = aviso abaixo
+  DISPLAY_CONFIRM    // pergunta em `text` (sem uso: o botao C nao tem mais funcao)
 } display_screen_t;
 
 // Monta a barra superior fixa e a area central sobre o objeto `screen`.

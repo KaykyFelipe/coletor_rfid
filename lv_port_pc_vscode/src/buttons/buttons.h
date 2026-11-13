@@ -3,12 +3,14 @@
 
 #include "../../main.h"
 
-// Botao principal de leitura RFID: o antigo "Ok" (coletar e descarregar), laranja, GPIO 33.
-#define BUTTON_READ BUTTON_C
+// A: leitura individual (uma tag por aperto). B: leitura em lote (todas as tags
+// ineditas enquanto estiver pressionado). Nos dois, segurar le e dois cliques
+// rapidos sincronizam as pendentes daquele modo (ver src/state/app.cpp).
+#define BUTTON_SINGLE BUTTON_A
+#define BUTTON_BATCH BUTTON_B
 
-// Botoes sem funcao operacional nesta versao, reservados para uso futuro.
-#define BUTTON_SPARE_1 BUTTON_A
-#define BUTTON_SPARE_2 BUTTON_B
+// C (o antigo "Ok", laranja, GPIO 33) nao tem funcao durante o uso. Continua
+// acordando o aparelho do deep sleep e acendendo a tela, como qualquer botao.
 
 #define BUTTONS_COUNT 3
 #define BUTTONS_DEBOUNCE_MS 30
