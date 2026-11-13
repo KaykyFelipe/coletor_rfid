@@ -12,10 +12,14 @@
 // Intervalo de atualizacao da caracteristica de status (bateria e pendentes).
 #define APP_STATUS_MS 5000
 
+// Espera antes de tentar reenviar uma leitura guardada que nao foi confirmada.
+#define APP_FLUSH_RETRY_MS 3000
+
 typedef enum {
   APP_READY,     // aguardando o botao de leitura
   APP_READING,   // botao pressionado, inventario em andamento
   APP_SENDING,   // tag enviada, aguardando a confirmacao do celular
+  APP_FLUSH_KEYS,// digitando pelo teclado as leituras guardadas
   APP_READ_OK,   // tag lida, mostrando o resultado
   APP_NO_TAG,    // botao solto sem nenhuma tag
   APP_MESSAGE    // mostrando um texto enviado pelo celular

@@ -25,6 +25,11 @@ bool button_is_down(buttons_t button);
 bool button_was_pressed(buttons_t button);
 bool button_was_released(buttons_t button);
 
+// Estado fisico: nao e afetado por buttons_ignore_until_release().
 bool buttons_any_down();
+
+// Descarta o aperto atual: ate todos os botoes serem soltos, nenhum evento e
+// gerado e button_is_down() devolve false. Usado quando o aperto so acende a tela.
+void buttons_ignore_until_release();
 
 #endif // BUTTONS_H

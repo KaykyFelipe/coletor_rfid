@@ -9,6 +9,7 @@ typedef struct {
 } button_t;
 
 static button_t buttons[BUTTONS_COUNT];
+static bool ignoring = false;  // ver buttons_ignore_until_release()
 
 void buttons_init() {
   for (int b = 0; b < BUTTONS_COUNT; b++) {
@@ -34,10 +35,28 @@ void buttons_update(uint64_t now_ms) {
       button.released = !raw_down;
     }
   }
+
+  if (ignoring) {
+    bool any = false;
+    for (int b = 0; b < BUTTONS_COUNT; b++) {
+      buttons[b].pressed = false;
+      buttons[b].released = false;
+      any = any || buttons[b].down || buttons[b].raw_down;
+    }
+    if (!any) ignoring = false;
+  }
+}
+
+void buttons_ignore_until_release() {
+  ignoring = true;
+  for (int b = 0; b < BUTTONS_COUNT; b++) {
+    buttons[b].pressed = false;
+    buttons[b].released = false;
+  }
 }
 
 bool button_is_down(buttons_t button) {
-  return buttons[button].down;
+  return !ignoring && buttons[button].down;
 }
 
 bool button_was_pressed(buttons_t button) {

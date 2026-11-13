@@ -8,6 +8,7 @@
 #include "src/ble/ble.h"
 #include "src/buttons/buttons.h"
 #include "src/display/display.h"
+#include "src/power/power.h"
 #include "src/state/app.h"
 
 /*********************
@@ -157,6 +158,7 @@ static STRING sbuffer;
 static uint32_t draw_buf[DRAW_BUF_SIZE];  // / 4];
 
 static void init_pins() {
+  rtc_gpio_deinit((gpio_num_t)BUTTON_C_PIN);  // devolve o pino ao uso normal depois do deep sleep
   pinMode(BUTTON_A_PIN, INPUT_PULLUP);
   pinMode(BUTTON_B_PIN, INPUT_PULLUP);
   pinMode(BUTTON_C_PIN, INPUT_PULLUP);
@@ -353,7 +355,12 @@ int main(int argc, char **argv){
 static void verify_inactivity() {
   if (millis_now - poweroff_millis > INACTIVE_POWEROFF_MILLISECONDS) {
     #ifdef ESP32
-      esp_sleep_enable_timer_wakeup(35e6); // sleep for 5 min
+      // Desliga a tela e dorme ate o botao de leitura (C) ser pressionado.
+      // Antes o aparelho acordava sozinho a cada 35 s e gastava bateria.
+      display_set_backlight(false);
+      rtc_gpio_pullup_en((gpio_num_t)BUTTON_C_PIN);
+      rtc_gpio_pulldown_dis((gpio_num_t)BUTTON_C_PIN);
+      esp_sleep_enable_ext0_wakeup((gpio_num_t)BUTTON_C_PIN, 0);  // 0 = pressionado
       esp_deep_sleep_start();
     #else
       PRINTF("exit: %d | %d | %d | %d\n", millis_now, poweroff_millis, millis_now - poweroff_millis, INACTIVE_POWEROFF_MILLISECONDS);
@@ -415,6 +422,8 @@ void loop() {
 
   // Buttons (with debounce) and screens
   buttons_update(millis_now);
+  if (buttons_any_down()) poweroff_millis = millis_now;  // qualquer aperto adia o desligamento
+  power_loop(millis_now);  // apaga/acende a tela
   app_loop(millis_now);
 
   // Wait 5 ms

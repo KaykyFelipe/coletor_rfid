@@ -1,4 +1,5 @@
 #include "display.h"
+#include "../config.h"
 
 #include <cstring>
 
@@ -117,6 +118,12 @@ void display_show(display_screen_t which, const char *text, int count) {
   switch (which) {
     case DISPLAY_READY:
       lv_label_set_text(title_label, "Segure o botão\npara ler");
+      if (text) {
+        // Aviso das leituras guardadas
+        lv_label_set_text(subtitle_label, text);
+        subtitle_color = COLOR_AMBER;
+        has_subtitle = true;
+      }
       break;
 
     case DISPLAY_READING:
@@ -141,13 +148,14 @@ void display_show(display_screen_t which, const char *text, int count) {
     case DISPLAY_OFFLINE:
       title_font = &lv_font_montserrat_32;
       lv_label_set_text_fmt(title_label, count == 1 ? "%d guardada" : "%d guardadas", count);
-      lv_label_set_text(subtitle_label, "Pode continuar lendo.\nEnvia sozinho ao reconectar.");
+      lv_label_set_text(subtitle_label, "Pode continuar lendo.\nEnvia quando o celular voltar.");
       has_subtitle = true;
       break;
 
     case DISPLAY_SENDING:
       title_font = &lv_font_montserrat_32;
-      lv_label_set_text(title_label, "Enviando...");
+      if (count > 0) lv_label_set_text_fmt(title_label, "Enviando %d...", count);
+      else lv_label_set_text(title_label, "Enviando...");
       break;
 
     case DISPLAY_MESSAGE:
@@ -164,4 +172,24 @@ void display_show(display_screen_t which, const char *text, int count) {
 
 display_screen_t display_current() {
   return current;
+}
+
+void display_set_backlight(bool on) {
+  #ifdef ESP32
+    pinMode(DISPLAY_BACKLIGHT_PIN, OUTPUT);
+    digitalWrite(DISPLAY_BACKLIGHT_PIN, on ? HIGH : LOW);
+  #else // HAL
+    // Simulador de PC: um retangulo preto por cima faz o papel da tela apagada.
+    static lv_obj_t *blackout = NULL;
+    if (blackout == NULL) {
+      blackout = lv_obj_create(lv_obj_get_parent(content));
+      lv_obj_remove_style_all(blackout);
+      lv_obj_add_flag(blackout, LV_OBJ_FLAG_IGNORE_LAYOUT);
+      lv_obj_set_size(blackout, VIEW_W, VIEW_H);
+      lv_obj_set_pos(blackout, 0, 0);
+      lv_obj_set_style_bg_color(blackout, lv_color_hex(0x000000), 0);
+      lv_obj_set_style_bg_opa(blackout, LV_OPA_COVER, 0);
+    }
+    lv_obj_set_flag(blackout, LV_OBJ_FLAG_HIDDEN, on);
+  #endif // ESP32 / HAL
 }

@@ -1,8 +1,8 @@
 # Protocolo Bluetooth do Coletor RFID
 
-Este documento descreve como um aplicativo de celular conversa com o coletor por Bluetooth Low Energy (BLE). Ele vale para o firmware a partir da ETAPA 3.
+Este documento descreve como um aplicativo de celular conversa com o coletor por Bluetooth Low Energy (BLE). Ele vale para o firmware a partir da ETAPA 4.
 
-> **Estado:** o serviço foi escrito e testado apenas no simulador de PC, que não tem Bluetooth de verdade. O funcionamento na placa ainda precisa ser validado com o nRF Connect (roteiro no fim deste documento).
+> **Estado:** teclado, envio da leitura, fila offline e leitor RFID real validados na placa.
 
 ## Visão geral
 
@@ -92,11 +92,33 @@ O valor é conferido a cada 5 segundos e notificado quando muda.
 
 Se não houver aplicativo ouvindo, ou se a confirmação não chegar em 2 segundos, o coletor mostra os 8 últimos caracteres da tag.
 
+## Leituras guardadas (fila offline)
+
+O coletor guarda em memória permanente até **250 leituras** que ainda não foram confirmadas. Elas sobrevivem a desligar o aparelho. Uma leitura entra na fila em dois casos:
+
+- foi feita sem celular conectado;
+- foi enviada ao aplicativo, mas a confirmação não chegou em 2 segundos.
+
+**Reenvio para o aplicativo.** Quando o aplicativo ativa as notificações de Leitura e o coletor está na tela "Pronto", ele reenvia a leitura mais antiga, no mesmo formato de uma leitura nova, e espera a **Confirmação** com o mesmo `seq`. Só depois da confirmação a leitura sai da fila e a próxima é enviada. Sem confirmação em 2 segundos, o coletor tenta de novo a mesma leitura 3 segundos depois.
+
+O que o aplicativo precisa cuidar:
+
+- **Confirmar toda leitura recebida**, nova ou reenviada. Leitura não confirmada volta indefinidamente.
+- **Ignorar repetidas.** Se a energia cair logo depois de uma confirmação, a mesma leitura (mesmo `seq`, mesmo EPC e horário) pode chegar outra vez. Confirme de novo e não registre em dobro.
+- **Ordenar por `seq`.** Uma leitura nova feita enquanto ainda há guardadas é enviada na hora, antes das antigas.
+- **Horário das guardadas.** Se o relógio não estava acertado no momento da leitura (bit 0 de flags = 0), o horário são segundos desde que o coletor ligou e não pode ser convertido em data.
+- O `seq` é gravado e continua de onde parou depois de desligar. Volta a 1 depois de 65535.
+
+**Só com o teclado (sem aplicativo).** As guardadas não são digitadas sozinhas, para não caírem em um campo errado do celular. A tela "Pronto" mostra quantas há e o operador aperta o botão A ou B para o coletor digitá-las em ordem. Como o teclado não tem confirmação, cada uma sai da fila logo depois de digitada.
+
+**Fila cheia.** Sem celular e com 250 guardadas, o coletor recusa novas leituras e mostra "Memória cheia".
+
+Gravar o firmware com a opção `EraseFlash=all` apaga a fila e o número sequencial.
+
 ## Limitações atuais
 
-- **Leituras sem celular não são reenviadas.** Sem conexão, o coletor só conta as leituras (campo `pendentes`) e as perde ao desligar. A fila gravada em memória permanente, com reenvio em ordem e remoção só depois da confirmação, entra na ETAPA 4.
-- O número sequencial volta a 1 quando o coletor é desligado (também será gravado na ETAPA 4).
-- O leitor RFID ainda é o simulado: as tags e o RSSI são fictícios. O módulo RFID real não informa RSSI; quando ele entrar (ETAPA 5), o campo virá como `-128`.
+- O módulo RFID não informa RSSI: o campo vem sempre como `-128`. A melhor tag é a que respondeu mais vezes enquanto o botão estava pressionado. (Com o leitor simulado, o RSSI é fictício.)
+- O horário se perde ao desligar; ver o comando **Acertar relógio**.
 
 ## Roteiro de teste com o nRF Connect (Android)
 
@@ -109,3 +131,5 @@ Se não houver aplicativo ouvindo, ou se a confirmação não chegar em 2 segund
 7. Escreva `024F6C61`: a tela mostra `Ola` por 3 segundos.
 8. Na característica `a71a0004-…`, toque na seta para baixo (ler): o primeiro byte é a bateria em hexadecimal (`41` = 65%).
 9. Desligue o Bluetooth do celular e faça uma leitura: a tela mostra "1 guardada".
+10. Desligue e ligue o coletor: a tela "Pronto" continua mostrando "1 guardada".
+11. Ligue o Bluetooth, conecte e ative as notificações de `a71a0002-…`: a leitura guardada chega sozinha e se repete a cada 5 segundos até você escrever a confirmação com o `seq` dela. Depois da confirmação, o aviso de guardada some da tela.
