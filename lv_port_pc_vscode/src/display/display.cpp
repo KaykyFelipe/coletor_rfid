@@ -148,7 +148,7 @@ void display_show(display_screen_t which, const char *text, int count) {
     case DISPLAY_OFFLINE:
       title_font = &lv_font_montserrat_32;
       lv_label_set_text_fmt(title_label, count == 1 ? "%d guardada" : "%d guardadas", count);
-      lv_label_set_text(subtitle_label, "Pode continuar lendo.\nEnvia quando o celular voltar.");
+      lv_label_set_text(subtitle_label, "Po  continuar lendo.\nEnvia quando o celular voltar.");
       has_subtitle = true;
       break;
 

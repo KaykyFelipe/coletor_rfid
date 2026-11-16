@@ -224,9 +224,9 @@ static void show_batch(bool force) {
   if (!force && key == batch_hint) return;
   batch_hint = key;
 
-  if (full) snprintf(hint, sizeof(hint), "Memória cheia");
+  if (full) snprintf(hint, sizeof(hint), "Memória Cheia");
   else if (pending == 0) snprintf(hint, sizeof(hint), "Procurando...");
-  else snprintf(hint, sizeof(hint), pending == 1 ? "%d pendente" : "%d pendentes", pending);
+  else snprintf(hint, sizeof(hint), pending == 1 ? "%d Pendente" : "%d Pendentes", pending);
   display_show(DISPLAY_BATCH, hint, batch_count);
 }
 
@@ -306,7 +306,7 @@ static void finish_reading(uint64_t now_ms) {
     PRINTF("BATCH: %d read | duplicates ignored: %u | pending: %u\n", batch_count, (unsigned)rfid_duplicates().size(), storage_count());
     if (batch_count == 0 && storage_count() >= STORAGE_CAPACITY && !rfid_tags().empty()) {
       feedback_error();
-      show_message("Memória cheia", now_ms);
+      show_message("Memória Cheia", now_ms);
     }
     else if (batch_count == 0) {
       show_nothing_read(now_ms);
@@ -329,14 +329,14 @@ static void finish_reading(uint64_t now_ms) {
   if (storage_count() >= STORAGE_CAPACITY) {
     PRINTF("STORAGE: queue full, reading refused\n");
     feedback_error();
-    show_message("Memória cheia", now_ms);
+    show_message("Memória Cheia", now_ms);
     return;
   }
 
   record = make_record(tag, now_ms);
   if (!storage_push(record)) {
     feedback_error();
-    show_message("Falha na memória", now_ms);
+    show_message("Falha na Memória", now_ms);
     return;
   }
   feedback_read_ok();
@@ -368,7 +368,7 @@ static void start_sync(bool batch, uint64_t now_ms) {
   sync_index = 0;
   sync_round_acks = 0;
   sync_shown = -1;
-  display_show(DISPLAY_MESSAGE, "Preparando\nenvio...");
+  display_show(DISPLAY_MESSAGE, "Preparando\nEnvio...");
   enter(APP_SYNC, now_ms);
 }
 
@@ -421,7 +421,7 @@ static void sync_loop(uint64_t now_ms) {
     }
     else {
       feedback_error();
-      show_message("Falha no envio", now_ms);
+      show_message("Falha no Envio", now_ms);
     }
     return;
   }
