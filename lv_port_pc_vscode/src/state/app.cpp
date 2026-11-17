@@ -461,7 +461,7 @@ static void sync_loop(uint64_t now_ms) {
   left = pending_of(sync_batch);
   if (left == 0) {
     PRINTF("SYNC: done\n");
-    show_message("Sincronização\nConcluida", now_ms);
+    show_message("Sincronização\nConcluída", now_ms);
     return;
   }
   if (left != sync_shown) {

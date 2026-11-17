@@ -14,11 +14,11 @@ O projeto original é de Junior Polegato (estado de 23/10/2025, guardado em [col
 | Leitor RFID real | Validado na placa |
 | Fila offline (memória permanente) | Validado na placa |
 | Tela apaga após 5 min, acordar do deep sleep pelo botão | Validado na placa |
-| Controle de duplicidade (só entre as leituras pendentes) | Testado no simulador; **falta validar na placa** |
-| Modo em lote (botão B), sessões e confirmação individual | Testado no simulador; **falta validar na placa** |
+| Controle de duplicidade (só entre as leituras pendentes) | Validado na placa |
+| Modo em lote (botão B), sessões e confirmação individual | Validado na placa no modo teclado; com um aplicativo, só no simulador (o aplicativo ainda não existe) |
 | Sincronização por duplo clique em A e B | Validado na placa |
-| A + B por 3 s apaga as pendentes | Testado no simulador; **falta validar na placa** |
-| Wi-Fi e envio para a API (botão C) | Lógica testada no simulador; **Wi-Fi, HTTPS e horário nunca rodaram na placa** |
+| A + B por 3 s apaga as pendentes | Validado na placa |
+| Wi-Fi e envio para a API (botão C) | Validado na placa |
 | Buzzer e vibração | Preparado, **inativo**: o aparelho não tem esses componentes ligados |
 | Modo em lote (várias tags por leitura) | Não implementado; `rfid_tags()` já devolve todas as tags vistas |
 
@@ -44,6 +44,7 @@ O protocolo Bluetooth para o aplicativo está em [docs/PROTOCOLO_BLE.md](docs/PR
 Além do Bluetooth, o coletor envia as leituras direto para a API da Ativa pelo Wi-Fi.
 
 - **Wi-Fi:** fica desligado. Liga no clique em C, conecta na rede `Ativa` (espera até 15 s), envia e desliga de novo. Não depende do celular nem do Bluetooth. Motivo: a bateria é medida por um pino (GPIO 25, ADC2) que o ESP32 não deixa ler com o Wi-Fi ligado; com o Wi-Fi sempre ligado o aparelho reiniciava e o percentual da bateria não atualizava. O nome e a senha da rede ficam em [src/config.h](lv_port_pc_vscode/src/config.h).
+- **Bluetooth desligado durante o envio:** no clique em C o coletor desconecta o celular e desliga o Bluetooth, porque com os dois rádios ligados não sobra memória para o HTTPS. No fim do envio o Bluetooth volta e o celular pareado reconecta sozinho em alguns segundos. Enquanto isso o modo teclado não digita.
 - **Um clique em C:** envia todas as leituras pendentes da fila da API, de A e de B, uma por vez. A tela mostra "Conectando WiFi..." e depois "Enviando leituras..." com a quantidade que falta.
 - **Endereço:** `POST https://api-app.ativalocacao.com.br/rfid`, com validação do certificado HTTPS e limite de 10 s por leitura.
 - **Horário:** vem da internet (NTP) logo depois de o Wi-Fi conectar, no primeiro envio depois de ligar o aparelho. O `firstSeenTimestamp` é o momento do envio, em UTC. Sem horário válido o coletor não envia e mostra "Aguardando Horário".
@@ -116,7 +117,7 @@ Tudo em [lv_port_pc_vscode/](lv_port_pc_vscode/):
 | `src/rfid/rfid.cpp` | Inventário e escolha da melhor tag |
 | `src/rfid/rfid_real.cpp` | Leitor real (módulo na `Serial2`) |
 | `src/rfid/rfid_sim.cpp` | Leitor simulado |
-| `src/ble/` | Teclado Bluetooth + serviço GATT do coletor |
+| `src/ble/` | Teclado Bluetooth + serviço GATT do coletor; desliga e religa o Bluetooth durante o envio pela API |
 | `src/storage/` | Leituras pendentes (filas do Bluetooth e da API), número sequencial e sessão na memória permanente (LittleFS). O histórico de tags está no código, mas sem uso |
 | `src/net/` | Wi-Fi, horário pela internet e envio HTTPS para a API da Ativa |
 | `src/power/` | Apagar e acender a tela |
@@ -184,6 +185,14 @@ cmake --build build_sim --parallel 4
 ```
 
 Na janela: a caixa de texto no alto lista as tags "ao alcance" (uma por linha, a primeira é a mais forte), o interruptor BLE faz o papel do celular e os botões A, B e C são os do aparelho. Segure A ou B com o mouse para ler; dois cliques rápidos sincronizam. O celular simulado confirma cada leitura com o nome "Betoneira 400L"; as de número múltiplo de 3 ficam sem resposta na primeira vez, para exercitar a espera de 2 s, e são confirmadas no reenvio. Para simular um celular só com teclado (sem aplicativo), abra o simulador com a variável de ambiente `SIM_KEYBOARD_ONLY=1`.
+
+## Testes automáticos
+
+[tests/app_test.cpp](lv_port_pc_vscode/tests/app_test.cpp) confere a lógica no PC, sem tela e sem placa (leitura, filas do Bluetooth e da API, duplo clique, troca de modo, Wi-Fi e Bluetooth ligando e desligando). Os comandos para compilar e rodar estão no topo do arquivo.
+
+## Manutenção
+
+Para mexer no firmware no futuro, leia antes o [guia de manutenção](docs/MANUTENCAO.md): decisões que não podem ser desfeitas, diagnóstico pela serial e melhorias possíveis.
 
 ## Pendências conhecidas
 

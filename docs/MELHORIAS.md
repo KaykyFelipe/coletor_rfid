@@ -2,7 +2,7 @@
 
 Este documento resume o que mudou no firmware do coletor RFID portátil da Ativa Locação em relação à versão original de Junior Polegato (estado de 23/10/2025, guardada sem alterações na pasta `coletor/`). Situação em 16/11/2026.
 
-Para o uso do aparelho no dia a dia, veja o [README](../README.md). Para quem vai desenvolver o aplicativo do celular, veja o [Protocolo Bluetooth](PROTOCOLO_BLE.md).
+Para o uso do aparelho no dia a dia, veja o [README](../README.md). Para mexer no firmware no futuro, veja o [guia de manutenção](MANUTENCAO.md). Para quem vai desenvolver o aplicativo do celular, veja o [Protocolo Bluetooth](PROTOCOLO_BLE.md).
 
 ## Resumo
 
@@ -106,6 +106,7 @@ Durante o envio a tela mostra "Preparando envio...", "Enviando leituras..." com 
 ### Envio para a API da Ativa pelo Wi-Fi (botão C)
 
 - O Wi-Fi fica desligado. No clique em C o coletor liga o Wi-Fi, conecta na rede `Ativa`, envia e desliga. Isso acrescenta alguns segundos a cada envio.
+- Durante o envio pela API o Bluetooth também desliga: com os dois rádios ligados não sobrava memória para a conexão HTTPS. No fim, o Bluetooth volta e o celular reconecta sozinho.
 - O Wi-Fi não fica ligado o tempo todo porque a bateria é medida por um pino que o ESP32 não deixa ler com o Wi-Fi ligado. Na primeira versão, com Wi-Fi sempre ligado, o aparelho reiniciava sem parar.
 - Um clique no botão C envia cada leitura guardada para `https://api-app.ativalocacao.com.br/rfid`, no formato da API (`tag_reads`), com o nome de leitor `ColetorTI`.
 - O horário de cada envio vem da internet. A conexão é HTTPS com conferência do certificado.
@@ -122,17 +123,18 @@ Durante o envio a tela mostra "Preparando envio...", "Enviando leituras..." com 
 | Leituras guardadas ao desligar | Validado na placa |
 | Tela apaga em 5 min; acordar do deep sleep pelo botão C | Validado na placa |
 | Leitura em lote, envio por duplo clique e releitura após o envio | Validado na placa |
-| A + B por 3 s apaga as pendentes | Testado só no simulador; falta validar na placa |
-| Wi-Fi e envio para a API (botão C) | Lógica testada só no simulador; Wi-Fi, HTTPS e horário nunca rodaram na placa |
+| A + B por 3 s apaga as pendentes | Validado na placa |
+| Wi-Fi e envio para a API (botão C) | Validado na placa |
 | Envio pelo serviço próprio com um aplicativo de verdade | Testado com o nRF Connect nas etapas iniciais; não há aplicativo final ainda |
 
-Além dos testes na placa, a lógica é conferida por 107 verificações automáticas no computador (leitura, envio, confirmação parcial, desconexão no meio do envio, reinício, duplo clique, troca de modo, filas do Bluetooth e da API). Esse teste automático ainda não está dentro do repositório.
+Além dos testes na placa, a lógica é conferida por 107 verificações automáticas no computador (leitura, envio, confirmação parcial, desconexão no meio do envio, reinício, duplo clique, troca de modo, filas do Bluetooth e da API). O teste fica em [lv_port_pc_vscode/tests/app_test.cpp](../lv_port_pc_vscode/tests/app_test.cpp).
 
 ## Pontos de atenção
 
 - **Quem usa só um canal enche a memória.** Uma leitura enviada só pelo Bluetooth (ou só pela API) continua guardada, esperando o outro canal, e a tag fica como "Já registrada". Com 250 leituras guardadas o coletor para de ler. A saída é A + B por 3 s.
 - **A senha do Wi-Fi está escrita no código**, que fica no GitHub. Se o repositório for público, a senha da rede fica exposta.
 - **Durante o envio pela API o percentual da bateria não atualiza.** Ele volta a ser medido quando o Wi-Fi desliga, no fim do envio.
+- **Durante o envio pela API o celular fica desconectado.** O modo teclado não digita até o Bluetooth voltar, alguns segundos depois do fim do envio.
 - **A API não tem autenticação nem proteção contra repetição.** Se a conexão cair depois de a API receber e antes de o coletor ter a resposta, a mesma tag é enviada de novo no próximo clique em C.
 
 - **Troca de botão apaga leituras não enviadas.** É a regra pedida, mas é o erro de operação mais provável: ler com A, esquecer de enviar e ler com B.

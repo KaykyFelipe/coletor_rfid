@@ -2,7 +2,7 @@
 
 Este documento descreve como um aplicativo de celular conversa com o coletor por Bluetooth Low Energy (BLE). Ele vale para o firmware com sessões de leitura (botões A e B). **Não é compatível com a versão anterior:** a leitura e a confirmação passaram a levar o número da sessão.
 
-> **Estado:** teclado, envio da leitura, fila e leitor RFID real validados na placa na versão anterior. Sessões, modo em lote, sincronização por duplo clique e o novo formato da confirmação foram testados só no simulador; **falta validar na placa**.
+> **Estado:** teclado, envio da leitura, fila e leitor RFID real validados na placa na versão anterior. Sessões, modo em lote e sincronização por duplo clique foram validados na placa no modo teclado. O formato da confirmação (`0x01` com sessão) foi testado só no simulador, porque o aplicativo ainda não existe.
 
 ## Visão geral
 
