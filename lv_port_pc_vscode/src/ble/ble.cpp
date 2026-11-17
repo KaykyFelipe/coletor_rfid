@@ -73,7 +73,8 @@ static CollectorCallbacks collector_callbacks;
 class CollectorKeyboard : public BleKeyboard {
   protected:
     void onStarted(BLEServer *server) override {
-      event_queue = xQueueCreate(8, sizeof(ble_event_t));
+      // Chamado de novo a cada ble_resume(): a fila e criada uma vez so.
+      if (event_queue == NULL) event_queue = xQueueCreate(8, sizeof(ble_event_t));
 
       NimBLEService *service = server->createService(BLE_SERVICE_UUID);
       reading_chr = service->createCharacteristic(BLE_READING_UUID, NIMBLE_PROPERTY::NOTIFY);
@@ -98,8 +99,10 @@ BleKeyboard &ble_keyboard_instance() {
   return keyboard;
 }
 
+static bool suspended = false;
+
 bool ble_phone_connected() {
-  return ble_keyboard_instance().isConnected();
+  return !suspended && ble_keyboard_instance().isConnected();
 }
 
 bool ble_app_listening() {
@@ -142,6 +145,55 @@ void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history)
   if (ble_phone_connected()) status_chr->notify();
 }
 
+void ble_suspend() {
+  if (suspended) return;
+
+  PRINTF("BLE: off for API upload | heap before %u\n", (unsigned)ESP.getFreeHeap());
+
+  // Desconecta o celular antes: o aviso de desconexao zera o "conectado" do
+  // teclado, que main.cpp consulta para digitar (o teclado nao pode tentar
+  // digitar depois que os objetos do Bluetooth forem apagados).
+  NimBLEServer *server = NimBLEDevice::getServer();
+  if (server != NULL) {
+    for (uint16_t handle : server->getPeerDevices()) server->disconnect(handle);
+  }
+  uint32_t start_ms = millis();
+  while (ble_keyboard_instance().isConnected() && millis() - start_ms < 2000) delay(10);
+  if (ble_keyboard_instance().isConnected()) {
+    // Nao desconectou: deixa o Bluetooth ligado (o envio provavelmente falha por memoria).
+    PRINTF("BLE: phone did not disconnect, Bluetooth stays on\n");
+    return;
+  }
+
+  app_listening = false;
+  // Os objetos GATT sao apagados por deinit(): ninguem pode usa-los ate o resume.
+  reading_chr = NULL;
+  status_chr = NULL;
+  NimBLEDevice::stopAdvertising();
+  // O teclado se registra como callbacks do servidor com "apagar junto" (padrao
+  // da biblioteca); deinit() tentaria apagar o objeto do teclado, que e
+  // estatico, e o ESP32 aborta. Solta o vinculo antes.
+  if (server != NULL) server->setCallbacks(nullptr);
+  NimBLEDevice::deinit(true);  // para o NimBLE e o controlador e libera a memoria deles
+  suspended = true;
+  PRINTF("BLE: off | heap after %u | largest block %u\n", (unsigned)ESP.getFreeHeap(), (unsigned)ESP.getMaxAllocHeap());
+}
+
+void ble_resume() {
+  if (!suspended) return;
+
+  // Monta de novo o teclado HID e o servico proprio, e volta a anunciar.
+  // (A biblioteca do teclado nao apaga o objeto HID anterior: perde ~200 bytes
+  // a cada envio pela API, devolvidos quando o aparelho reinicia ou dorme.)
+  ble_keyboard_instance().begin();
+  suspended = false;
+  PRINTF("BLE: on | heap %u\n", (unsigned)ESP.getFreeHeap());
+}
+
+bool ble_suspended() {
+  return suspended;
+}
+
 #else // HAL
 
 // Simulador de PC: nao ha Bluetooth. O interruptor "BLE" da janela faz o papel
@@ -155,6 +207,8 @@ void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history)
 
 #define SIM_ACK_DELAY_MS 400
 
+bool ble_suspended();
+
 typedef struct {
   uint64_t at_ms;
   uint16_t seq;
@@ -165,12 +219,12 @@ static std::vector<sim_ack_t> acks;
 static std::vector<uint16_t> refused;  // leituras que ja ficaram sem confirmacao uma vez
 
 bool ble_phone_connected() {
-  return ble_is_connected();
+  return ble_is_connected() && !ble_suspended();
 }
 
 bool ble_app_listening() {
   static const bool keyboard_only = getenv("SIM_KEYBOARD_ONLY") != NULL;
-  return ble_is_connected() && !keyboard_only;
+  return ble_phone_connected() && !keyboard_only;
 }
 
 bool ble_send_reading(uint8_t flags, uint16_t seq, const char *epc, int rssi, uint32_t timestamp) {
@@ -213,6 +267,22 @@ void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history)
   if (value == last) return;
   last = value;
   PRINTF("BLE SIM: status battery %u%% | pending %u | history %u\n", battery_percent, pending, history);
+}
+
+static bool suspended = false;
+
+void ble_suspend() {
+  if (!suspended) PRINTF("BLE SIM: off\n");
+  suspended = true;
+}
+
+void ble_resume() {
+  if (suspended) PRINTF("BLE SIM: on\n");
+  suspended = false;
+}
+
+bool ble_suspended() {
+  return suspended;
 }
 
 #endif // ESP32 / HAL

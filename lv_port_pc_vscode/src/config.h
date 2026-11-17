@@ -33,4 +33,28 @@
 // GPIO da luz de fundo da tela (TFT_BL da placa TTGO T-Display).
 #define DISPLAY_BACKLIGHT_PIN 4
 
+/**********************
+ *  Wi-Fi e API da Ativa (botao C)
+ **********************/
+
+// Rede usada so para falar com a API. Fixa no firmware. O Wi-Fi so liga durante o envio (botao C).
+#define WIFI_SSID "Ativa"
+#define WIFI_PASSWORD "Ativa1234"
+
+// Tempo maximo para conectar na rede e receber o horario, a cada envio.
+#define WIFI_CONNECT_TIMEOUT_MS 15000UL
+
+// Cada leitura e enviada em um POST para https://API_HOST/API_PATH (sem autenticacao).
+#define API_HOST "api-app.ativalocacao.com.br"
+#define API_PORT 443
+#define API_PATH "/rfid"
+
+// Tempo maximo para conectar e para a API responder, por leitura.
+#define API_TIMEOUT_MS 10000
+
+// Valores fixos enviados em cada leitura.
+#define API_READER_NAME "ColetorTI"
+#define API_SITE "RibeiraoPreto"
+#define API_ANTENNA_PORT 1
+
 #endif // CONFIG_H

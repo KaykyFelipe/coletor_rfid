@@ -16,7 +16,9 @@ O projeto original é de Junior Polegato (estado de 23/10/2025, guardado em [col
 | Tela apaga após 5 min, acordar do deep sleep pelo botão | Validado na placa |
 | Controle de duplicidade (só entre as leituras pendentes) | Testado no simulador; **falta validar na placa** |
 | Modo em lote (botão B), sessões e confirmação individual | Testado no simulador; **falta validar na placa** |
-| Sincronização por duplo clique em A e B | Testado no simulador; **falta validar na placa** |
+| Sincronização por duplo clique em A e B | Validado na placa |
+| A + B por 3 s apaga as pendentes | Testado no simulador; **falta validar na placa** |
+| Wi-Fi e envio para a API (botão C) | Lógica testada no simulador; **Wi-Fi, HTTPS e horário nunca rodaram na placa** |
 | Buzzer e vibração | Preparado, **inativo**: o aparelho não tem esses componentes ligados |
 | Modo em lote (várias tags por leitura) | Não implementado; `rfid_tags()` já devolve todas as tags vistas |
 
@@ -24,17 +26,64 @@ O projeto original é de Junior Polegato (estado de 23/10/2025, guardado em [col
 
 - **Ler uma tag:** segure o botão A. Enquanto está pressionado, o coletor lê as tags ao alcance. Ao soltar, fica com a que respondeu mais vezes.
 - **Ler várias tags (lote):** segure o botão B. Cada tag inédita que aparecer é registrada; a tela mostra "Lote: N". Soltar pausa; segurar B de novo continua.
-- **Enviar ao celular:** nada é enviado sozinho, nem ao conectar. Escolha a planilha ou a tela no celular e dê **dois cliques rápidos** no botão: em A envia as leituras individuais, em B envia as do lote. A tela mostra "Enviando leituras..." e termina com "Sincronização concluída". Cada leitura só sai da memória quando o celular confirma (até 250 guardadas, mesmo desligando).
+- **Enviar ao celular:** nada é enviado sozinho, nem ao conectar. Escolha a planilha ou a tela no celular e dê **dois cliques rápidos** no botão: em A envia as leituras individuais, em B envia as do lote. A tela mostra "Enviando leituras..." e termina com "Sincronização concluída". Cada leitura só sai da fila do Bluetooth quando o celular confirma (até 250 guardadas, mesmo desligando).
 - **Sem celular:** dois cliques mostram "Celular desconectado" e as leituras continuam guardadas.
 - **Trocar de A para B (ou de B para A):** começa uma sessão nova e **apaga as leituras da sessão anterior que ainda não foram enviadas**. Envie com dois cliques antes de ler com o outro botão.
-- **Tag repetida:** uma tag que ainda está pendente (lida e não enviada) é ignorada durante a leitura, mesmo depois de desligar o aparelho. Se só havia repetidas ao alcance, a tela mostra "Já registrada".
-- **Nova conferência:** depois de enviadas ao celular, as mesmas tags podem ser lidas de novo, sem limpar nada.
-- **Botão C:** sem função durante o uso.
+- **Tag repetida:** uma tag que ainda está na memória (falta enviar pelo Bluetooth ou pela API) é ignorada durante a leitura, mesmo depois de desligar o aparelho. Se só havia repetidas ao alcance, a tela mostra "Já registrada".
+- **Nova conferência:** depois de enviadas pelos dois canais (celular e API), as mesmas tags podem ser lidas de novo. Se um dos canais não é usado, limpe com A + B por 3 s.
+- **Apagar as pendentes:** segure A e B juntos por 3 segundos (aperte os dois ao mesmo tempo). Todas as leituras guardadas, das duas filas (Bluetooth e API), são apagadas **na hora, sem pergunta**, e a tela mostra "Memória Limpa". As tags podem ser lidas de novo.
+- **Enviar para a API (Wi-Fi):** um clique no botão C envia todas as leituras pendentes para a API da Ativa. Veja "Envio para a API da Ativa" abaixo.
 - **Tela:** apaga após 5 minutos sem uso. Qualquer botão acende; esse aperto não inicia leitura.
 - **Desligamento:** após 10 minutos sem uso o ESP32 entra em deep sleep e acorda com o botão C. Ligar e desligar de verdade é feito pelo módulo carregador (1 clique liga, 2 cliques desligam).
 - Só são aceitas tags no formato do filtro em [src/config.h](lv_port_pc_vscode/src/config.h) (`RFID_TAG_FILTER`), por exemplo `TP.01.123456`.
 
 O protocolo Bluetooth para o aplicativo está em [docs/PROTOCOLO_BLE.md](docs/PROTOCOLO_BLE.md).
+
+## Envio para a API da Ativa (Wi-Fi, botão C)
+
+Além do Bluetooth, o coletor envia as leituras direto para a API da Ativa pelo Wi-Fi.
+
+- **Wi-Fi:** fica desligado. Liga no clique em C, conecta na rede `Ativa` (espera até 15 s), envia e desliga de novo. Não depende do celular nem do Bluetooth. Motivo: a bateria é medida por um pino (GPIO 25, ADC2) que o ESP32 não deixa ler com o Wi-Fi ligado; com o Wi-Fi sempre ligado o aparelho reiniciava e o percentual da bateria não atualizava. O nome e a senha da rede ficam em [src/config.h](lv_port_pc_vscode/src/config.h).
+- **Um clique em C:** envia todas as leituras pendentes da fila da API, de A e de B, uma por vez. A tela mostra "Conectando WiFi..." e depois "Enviando leituras..." com a quantidade que falta.
+- **Endereço:** `POST https://api-app.ativalocacao.com.br/rfid`, com validação do certificado HTTPS e limite de 10 s por leitura.
+- **Horário:** vem da internet (NTP) logo depois de o Wi-Fi conectar, no primeiro envio depois de ligar o aparelho. O `firstSeenTimestamp` é o momento do envio, em UTC. Sem horário válido o coletor não envia e mostra "Aguardando Horário".
+- **Confirmação:** a leitura só sai da fila da API quando a API responde com sucesso (HTTP 2xx). No primeiro erro o envio para e as demais continuam guardadas.
+
+Corpo enviado, uma leitura por POST (mudam `epc`, `firstSeenTimestamp` e `mac`; os outros campos são fixos, copiados do modelo):
+
+```json
+{
+    "readerName": "ColetorTI",
+    "mac": "AA:BB:CC:DD:EE:FF",
+    "site": "RibeiraoPreto",
+    "tag_reads": [
+        {
+            "epc": "TP.01.000100",
+            "isHeartBeat": false,
+            "isInventoryStatus": false,
+            "firstSeenTimestamp": 1789151443697000,
+            "antennaPort": 1,
+            "peakRssi": -45.5,
+            "txPower": 30
+        }
+    ]
+}
+```
+
+`mac` é o endereço Wi-Fi do próprio coletor. `firstSeenTimestamp` é em microssegundos desde 1970 (UTC). `readerName` e `site` ficam em [src/config.h](lv_port_pc_vscode/src/config.h).
+
+| Mensagem na tela | Significado |
+| --- | --- |
+| Envio Concluído! | Todas as pendentes foram aceitas pela API. |
+| Sem Tags Pendentes | Não há nada na fila da API. |
+| Conectando WiFi... | O Wi-Fi está ligando e conectando (alguns segundos). |
+| WiFi Desconectado | Não conectou na rede em 15 s, ou a rede caiu no meio. As não enviadas continuam guardadas. |
+| API com Problemas / Faltam N | A API não respondeu ou recusou. As N restantes continuam guardadas. |
+| Aguardando Horário | O Wi-Fi conectou, mas o horário da internet não chegou em 15 s. Nada foi enviado. Tente de novo. |
+
+**Duas filas independentes.** Cada leitura fica em duas filas: a do Bluetooth (duplo clique em A ou B) e a da API (clique em C). Enviar por um canal não tira a leitura do outro. A leitura só sai da memória depois de enviada pelos **dois** canais, e até lá a tag aparece como "Já registrada". Quem usa só um dos canais precisa limpar a memória de tempos em tempos com A + B por 3 s; senão ela enche (250 leituras) e o coletor mostra "Memória cheia".
+
+**Se a API trocar de autoridade certificadora** (hoje Let's Encrypt), o envio passa a falhar com "API com Problemas" até os certificados raiz em [src/net/net.cpp](lv_port_pc_vscode/src/net/net.cpp) serem atualizados.
 
 ## Hardware
 
@@ -44,7 +93,7 @@ Placa LilyGO TTGO T-Display (ESP32, 16 MB de flash, sem PSRAM, tela ST7789 135x2
 | --- | --- | --- |
 | Botão A | 27 | segurar: leitura individual; 2 cliques: enviar as individuais |
 | Botão B | 32 | segurar: leitura em lote; 2 cliques: enviar o lote |
-| Botão C | 33 | sem função no uso; acorda do deep sleep |
+| Botão C | 33 | 1 clique: enviar para a API pelo Wi-Fi; acorda do deep sleep |
 | Antena RFID, RX do ESP32 | 2 | fio preto, TX do módulo |
 | Antena RFID, TX do ESP32 | 15 | fio amarelo, RX do módulo |
 | Antena RFID, enable | 17 | fio verde |
@@ -68,7 +117,8 @@ Tudo em [lv_port_pc_vscode/](lv_port_pc_vscode/):
 | `src/rfid/rfid_real.cpp` | Leitor real (módulo na `Serial2`) |
 | `src/rfid/rfid_sim.cpp` | Leitor simulado |
 | `src/ble/` | Teclado Bluetooth + serviço GATT do coletor |
-| `src/storage/` | Fila de leituras pendentes, número sequencial e sessão na memória permanente (LittleFS). O histórico de tags está no código, mas sem uso |
+| `src/storage/` | Leituras pendentes (filas do Bluetooth e da API), número sequencial e sessão na memória permanente (LittleFS). O histórico de tags está no código, mas sem uso |
+| `src/net/` | Wi-Fi, horário pela internet e envio HTTPS para a API da Ativa |
 | `src/power/` | Apagar e acender a tela |
 | `src/feedback/` | Bipe e vibração (inativos enquanto os pinos forem `-1`) |
 | `legacy/` | Menu antigo, fora da compilação, guardado para consulta |

@@ -269,29 +269,53 @@ bool storage_remove(uint16_t seq) {
   return true;
 }
 
-void storage_mark_sent(uint16_t seq) {
-  int index = storage_find(seq);
+void storage_clear() {
+  queue.clear();
+  queue_rewrite();
+}
 
-  if (index < 0 || (queue[index].flags & STORAGE_FLAG_SENT)) return;
-  queue[index].flags |= STORAGE_FLAG_SENT;
+// Liga um bit de `flags` na leitura, tambem no arquivo.
+static void queue_set_flag(int index, uint8_t flag) {
+  if (queue[index].flags & flag) return;
+  queue[index].flags |= flag;
 
   if (persistent && !fs_patch(QUEUE_FILE, &queue[index].flags,
                               (head + index) * sizeof(storage_record_t) + offsetof(storage_record_t, flags), 1)) {
-    PRINTF("STORAGE: failed to mark reading %u as sent\n", seq);
+    PRINTF("STORAGE: failed to save flags of reading %u\n", queue[index].seq);
   }
 }
 
+void storage_mark_sent(uint16_t seq) {
+  int index = storage_find(seq);
+
+  if (index >= 0) queue_set_flag(index, STORAGE_FLAG_SENT);
+}
+
+bool storage_complete(uint16_t seq, uint8_t done_flag) {
+  int index = storage_find(seq);
+
+  if (index < 0) return false;
+  if ((queue[index].flags | done_flag) & STORAGE_FLAG_BLE_DONE && (queue[index].flags | done_flag) & STORAGE_FLAG_API_DONE) {
+    storage_remove(seq);  // entregue pelos dois canais: sai da memoria
+    return true;
+  }
+  queue_set_flag(index, done_flag);
+  return false;
+}
+
 uint16_t storage_cancel_session(uint8_t session) {
-  uint16_t removed = 0;
+  uint16_t cancelled = 0;
 
   for (size_t i = queue.size(); i-- > 0;) {
-    if (queue[i].session == session && !(queue[i].flags & STORAGE_FLAG_SENT)) {
-      queue.erase(queue.begin() + i);
-      removed++;
-    }
+    storage_record_t &record = queue[i];
+    if (record.session != session || (record.flags & (STORAGE_FLAG_SENT | STORAGE_FLAG_BLE_DONE))) continue;
+
+    cancelled++;
+    if (record.flags & STORAGE_FLAG_API_DONE) queue.erase(queue.begin() + i);
+    else record.flags |= STORAGE_FLAG_BLE_DONE;  // continua pendente so para a API
   }
-  if (removed > 0) queue_rewrite();
-  return removed;
+  if (cancelled > 0) queue_rewrite();
+  return cancelled;
 }
 
 void storage_session_load(uint8_t &session, uint8_t &mode) {
@@ -315,11 +339,11 @@ uint16_t storage_count() {
   return (uint16_t)queue.size();
 }
 
-uint16_t storage_count_batch() {
+uint16_t storage_count_where(uint8_t mask, uint8_t value) {
   uint16_t count = 0;
 
   for (const storage_record_t &record : queue) {
-    if (record.flags & STORAGE_FLAG_BATCH) count++;
+    if ((record.flags & mask) == value) count++;
   }
   return count;
 }

@@ -155,7 +155,9 @@ static char hex[3] = {'\0'};
 static STRING sbuffer;
 
 #define DRAW_BUF_SIZE (SCREEN_WIDTH * SCREEN_HEIGHT / 10 * (LV_COLOR_DEPTH / 8))
-static uint32_t draw_buf[DRAW_BUF_SIZE];  // / 4];
+// DRAW_BUF_SIZE ja esta em bytes. O vetor era de uint32_t (4 vezes maior que o
+// necessario, 26 KB); os 19 KB que sobravam fazem falta para o HTTPS da API.
+static uint8_t draw_buf[DRAW_BUF_SIZE] __attribute__((aligned(4)));
 
 static void init_pins() {
   rtc_gpio_deinit((gpio_num_t)BUTTON_C_PIN);  // devolve o pino ao uso normal depois do deep sleep
@@ -451,8 +453,13 @@ float get_battery_voltage() {
     // auto voltage = ((float)v / 4095.) * 3.3 * (vref / 1000.) * battery_factor;
     // battery_voltage = (battery_voltage * 4. + current) / 5.;  // do movel average
 
+    // A bateria esta no ADC2 (GPIO 25), que o ESP32 nao deixa ler enquanto o
+    // Wi-Fi esta ligado: a leitura falha com ESP_ERR_TIMEOUT. Nesse caso vale a
+    // ultima tensao medida. (Com ESP_ERROR_CHECK aqui, o aparelho reiniciava em laco.)
     int calibrated_voltage;
-    ESP_ERROR_CHECK(adc_oneshot_get_calibrated_result(adc2_handle, adc_cali, ADC_CHANNEL_8, &calibrated_voltage));
+    if (adc_oneshot_get_calibrated_result(adc2_handle, adc_cali, ADC_CHANNEL_8, &calibrated_voltage) != ESP_OK) {
+      return battery_voltage;
+    }
     Serial.printf("Calibrated Voltage: %d mV\n", calibrated_voltage);
 
     // uint16_t v = analogRead(BATTERY);

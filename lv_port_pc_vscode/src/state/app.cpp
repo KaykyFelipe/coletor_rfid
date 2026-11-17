@@ -3,6 +3,7 @@
 #include "../buttons/buttons.h"
 #include "../display/display.h"
 #include "../feedback/feedback.h"
+#include "../net/net.h"
 #include "../power/power.h"
 #include "../rfid/rfid.h"
 #include "../storage/storage.h"
@@ -28,6 +29,13 @@ static size_t sync_index = 0;
 static uint64_t sync_sent_ms = 0;
 static int sync_round_acks = 0, sync_shown = -1;
 
+// Envio para a API (botao C): uma leitura por vez, da mais antiga para a mais nova
+static bool upload_waiting = false;
+static bool upload_connecting = false;
+static uint16_t upload_seq = 0;
+static size_t upload_index = 0;
+static int upload_shown = -1;
+
 // Relogio acertado pelo celular (comando BLE_CMD_CLOCK)
 static bool clock_set = false;
 static uint32_t clock_unix = 0;
@@ -39,6 +47,8 @@ static uint64_t status_ms = 0;
 static int ready_hint = -1;
 
 static void enter(app_state_t next, uint64_t now_ms) {
+  // O Wi-Fi so fica ligado durante o envio para a API.
+  if (state == APP_UPLOAD && next != APP_UPLOAD) net_off();
   state = next;
   state_since_ms = now_ms;
 }
@@ -51,6 +61,10 @@ static void enter(app_state_t next, uint64_t now_ms) {
  * - Duplo clique: dois cliques curtos do mesmo botao, com no maximo
  *   APP_DOUBLE_CLICK_MS entre soltar o primeiro e apertar o segundo.
  *
+ * - A e B juntos por APP_CLEAR_HOLD_MS: apagar as leituras pendentes. Os dois
+ *   precisam ser apertados com menos de APP_LONG_PRESS_MS de diferenca; depois
+ *   disso o primeiro ja comecou uma leitura e o segundo e ignorado.
+ *
  * Um aperto que vira pressao longa nunca conta como clique. Um clique curto
  * sozinho nao faz nada. Nada aqui bloqueia: so compara horarios.
  */
@@ -58,7 +72,9 @@ static void enter(app_state_t next, uint64_t now_ms) {
 typedef enum {
   GESTURE_NONE,
   GESTURE_LONG,    // pressao longa: comecar a leitura
-  GESTURE_DOUBLE   // duplo clique: sincronizar
+  GESTURE_DOUBLE,  // duplo clique: sincronizar
+  GESTURE_CLEAR,   // A e B juntos: apagar as pendentes
+  GESTURE_API      // um clique em C: enviar para a API
 } gesture_t;
 
 static const buttons_t gesture_buttons[2] = {BUTTON_SINGLE, BUTTON_BATCH};
@@ -67,6 +83,10 @@ static bool gesture_down[2], gesture_long[2], gesture_second[2];
 static uint64_t gesture_since_ms[2];
 static int click_button = -1;      // botao do ultimo clique curto, esperando o segundo
 static uint64_t click_ms = 0;
+static bool combo_active = false, combo_fired = false;  // A e B juntos
+static bool api_down = false;                           // botao C
+static uint64_t api_since_ms = 0;
+static uint64_t combo_since_ms = 0;
 
 static gesture_t poll_gesture(uint64_t now_ms, uint8_t &gesture_mode) {
   gesture_t result = GESTURE_NONE;
@@ -103,6 +123,37 @@ static gesture_t poll_gesture(uint64_t now_ms, uint8_t &gesture_mode) {
       }
     }
   }
+
+  // Botao C: um clique (solto em ate APP_API_CLICK_MAX_MS) pede o envio para a API.
+  bool c_down = button_is_down(BUTTON_API);
+  if (c_down && !api_down) {
+    api_down = true;
+    api_since_ms = now_ms;
+  }
+  else if (!c_down && api_down) {
+    api_down = false;
+    if (result == GESTURE_NONE && now_ms - api_since_ms <= APP_API_CLICK_MAX_MS) result = GESTURE_API;
+  }
+
+  // A e B juntos, fora de uma leitura ou de um envio: nenhum dos dois vale como
+  // clique nem como pressao longa.
+  if (gesture_down[0] && gesture_down[1] && (combo_active || (state != APP_READING && state != APP_SYNC))) {
+    if (!combo_active) {
+      combo_active = true;
+      combo_fired = false;
+      combo_since_ms = now_ms;
+    }
+    gesture_long[0] = gesture_long[1] = true;
+    click_button = -1;
+    result = GESTURE_NONE;
+    if (!combo_fired && now_ms - combo_since_ms >= APP_CLEAR_HOLD_MS) {
+      combo_fired = true;
+      result = GESTURE_CLEAR;
+    }
+  }
+  else {
+    combo_active = false;
+  }
   return result;
 }
 
@@ -130,10 +181,19 @@ static bool is_batch(const storage_record_t &record) {
   return (record.flags & STORAGE_FLAG_BATCH) != 0;
 }
 
-// Leituras pendentes de um modo (individual ou lote).
+// Fila do Bluetooth: leituras pendentes de um modo (individual ou lote).
 static int pending_of(bool batch) {
-  int batch_pending = storage_count_batch();
-  return batch ? batch_pending : storage_count() - batch_pending;
+  return storage_count_where(STORAGE_FLAG_BLE_DONE | STORAGE_FLAG_BATCH, batch ? STORAGE_FLAG_BATCH : 0);
+}
+
+// Fila da API: leituras pendentes, dos dois modos.
+static int pending_api() {
+  return storage_count_where(STORAGE_FLAG_API_DONE, 0);
+}
+
+// Resumo das filas, para redesenhar a tela "Pronto" so quando algo muda.
+static int pending_key() {
+  return (pending_of(false) * (STORAGE_CAPACITY + 1) + pending_of(true)) * (STORAGE_CAPACITY + 1) + pending_api();
 }
 
 // Modo planilha, igual ao firmware anterior: espaco + apagar acorda o campo de
@@ -155,19 +215,19 @@ static bool send_record(const storage_record_t &record) {
   return true;
 }
 
-// O celular recebeu a leitura: ela sai da fila. A partir daqui a mesma tag pode
-// ser lida de novo (o bloqueio de repetidas vale so para as pendentes).
+// O celular recebeu a leitura: ela sai da fila do Bluetooth. Se a API tambem ja
+// recebeu, a leitura sai da memoria e a tag pode ser lida de novo.
 static void confirm_record(const storage_record_t &record) {
   int index = storage_find(record.seq);
 
   if (index < 0) return;
-  storage_remove(record.seq);
+  bool removed = storage_complete(record.seq, STORAGE_FLAG_BLE_DONE);
 
   if (sync_waiting && sync_seq == record.seq) {
     sync_waiting = false;
     sync_round_acks++;
   }
-  if ((size_t)index < sync_index) sync_index--;
+  if (removed && (size_t)index < sync_index) sync_index--;
 }
 
 static storage_record_t make_record(const rfid_tag_t &tag, uint64_t now_ms) {
@@ -190,17 +250,17 @@ static storage_record_t make_record(const rfid_tag_t &tag, uint64_t now_ms) {
 // Tela "Pronto", com o aviso das leituras pendentes de cada modo quando houver.
 static void show_ready(uint64_t now_ms) {
   char hint[80];
-  int single = pending_of(false), batch = pending_of(true);
+  int single = pending_of(false), batch = pending_of(true), api = pending_api();
 
-  if (single + batch == 0) {
+  if (single + batch + api == 0) {
     display_show(DISPLAY_READY);
   }
   else {
-    snprintf(hint, sizeof(hint), "Pendentes  A: %d  B: %d\n2 cliques para enviar", single, batch);
+    snprintf(hint, sizeof(hint), "Pendentes  A: %d  B: %d  API: %d\n2 cliques: celular    C: API", single, batch, api);
     display_show(DISPLAY_READY, hint);
   }
 
-  ready_hint = single * (STORAGE_CAPACITY + 1) + batch;
+  ready_hint = pending_key();
   enter(APP_READY, now_ms);
 }
 
@@ -375,7 +435,7 @@ static void start_sync(bool batch, uint64_t now_ms) {
 // Posiciona sync_index na proxima leitura do modo que esta sendo sincronizado.
 static bool sync_next(storage_record_t &record) {
   while (storage_get(sync_index, record)) {
-    if (is_batch(record) == sync_batch) return true;
+    if (is_batch(record) == sync_batch && !(record.flags & STORAGE_FLAG_BLE_DONE)) return true;
     sync_index++;
   }
   return false;
@@ -455,6 +515,105 @@ static void sync_loop(uint64_t now_ms) {
 }
 
 /**********************
+ *  Envio para a API (Wi-Fi)
+ **********************/
+
+// Um clique em C: envia todas as leituras pendentes da fila da API, de A e de B.
+static void start_upload(uint64_t now_ms) {
+  PRINTF("API: upload requested | pending: %d | wifi: %d | clock: %d\n", pending_api(), net_wifi_connected(), net_time_valid());
+
+  if (pending_api() == 0) {
+    show_message("Sem Tags\nPendentes", now_ms);
+    return;
+  }
+
+  // Sem memoria para o HTTPS com o Bluetooth ligado: o Bluetooth desliga durante
+  // o envio (o celular desconecta) e religa quando o Wi-Fi desligar (app_loop).
+  ble_suspend();
+  // O Wi-Fi fica desligado fora do envio: liga agora e espera conectar (upload_loop).
+  net_on();
+  upload_connecting = true;
+  upload_waiting = false;
+  upload_index = 0;
+  upload_shown = -1;
+  display_show(DISPLAY_MESSAGE, "Conectando\nWiFi...");
+  enter(APP_UPLOAD, now_ms);
+}
+
+// Para no primeiro erro: as leituras nao confirmadas continuam na fila da API.
+static void upload_failed(uint64_t now_ms) {
+  char text[48];
+  int left = pending_api();
+
+  PRINTF("API: upload stopped | still pending: %d\n", left);
+  feedback_error();
+  if (!net_wifi_connected()) snprintf(text, sizeof(text), "WiFi\nDesconectado");
+  else snprintf(text, sizeof(text), left == 1 ? "API com Problemas\nFalta %d" : "API com Problemas\nFaltam %d", left);
+  show_message(text, now_ms);
+}
+
+static void upload_loop(uint64_t now_ms) {
+  storage_record_t record;
+  int left;
+
+  if (upload_connecting) {
+    // Espera o Wi-Fi conectar e o horario chegar da internet (nao envia com data errada).
+    if (!net_wifi_connected() || !net_time_valid()) {
+      if (now_ms - state_since_ms >= WIFI_CONNECT_TIMEOUT_MS) {
+        PRINTF("API: upload stopped | wifi: %d | clock: %d\n", net_wifi_connected(), net_time_valid());
+        feedback_error();
+        show_message(net_wifi_connected() ? "Aguardando\nHorário" : "WiFi\nDesconectado", now_ms);
+      }
+      return;
+    }
+    upload_connecting = false;
+  }
+
+  if (upload_waiting) {
+    net_post_t result = net_post_result();
+    if (result == NET_POST_BUSY) return;
+
+    upload_waiting = false;
+    if (result != NET_POST_OK) {
+      upload_failed(now_ms);
+      return;
+    }
+
+    // A API confirmou (HTTP 2xx): so agora a leitura sai da fila da API.
+    int index = storage_find(upload_seq);
+    if (index >= 0 && storage_complete(upload_seq, STORAGE_FLAG_API_DONE) && (size_t)index < upload_index) upload_index--;
+    PRINTF("API: reading %u confirmed | pending: %d\n", upload_seq, pending_api());
+  }
+
+  left = pending_api();
+  if (left == 0) {
+    PRINTF("API: upload done\n");
+    show_message("Envio\nConcluído!", now_ms);
+    return;
+  }
+  if (left != upload_shown) {
+    upload_shown = left;
+    display_show(DISPLAY_SENDING, NULL, left);
+  }
+
+  if (!net_wifi_connected()) {
+    upload_failed(now_ms);
+    return;
+  }
+
+  while (storage_get(upload_index, record) && (record.flags & STORAGE_FLAG_API_DONE)) upload_index++;
+  if (!storage_get(upload_index, record)) {
+    upload_index = 0;
+    return;
+  }
+
+  if (net_post_start(record.epc)) {
+    upload_waiting = true;
+    upload_seq = record.seq;
+  }
+}
+
+/**********************
  *  Bluetooth
  **********************/
 
@@ -473,6 +632,10 @@ static void handle_ble_events(uint64_t now_ms) {
         }
         if (record.session != event.session) {
           PRINTF("BLE: ack ignored, reading %u belongs to session %u\n", event.seq, record.session);
+          break;
+        }
+        if (record.flags & STORAGE_FLAG_BLE_DONE) {
+          PRINTF("BLE: ack ignored, reading %u was already confirmed\n", event.seq);
           break;
         }
         // Confirmacao individual: so agora a leitura sai da fila.
@@ -518,6 +681,7 @@ void app_init() {
   PRINTF("SESSION: %u | mode %u\n", session, mode);
   rfid_init();
   feedback_init();
+  net_init();
   show_ready(0);
 }
 
@@ -526,6 +690,10 @@ void app_loop(uint64_t now_ms) {
   gesture_t gesture;
 
   handle_ble_events(now_ms);
+  net_loop(now_ms);
+
+  // Fim do envio pela API: o Bluetooth volta quando o Wi-Fi ja desligou.
+  if (ble_suspended() && state != APP_UPLOAD && net_radio_off()) ble_resume();
 
   if (now_ms - status_ms >= APP_STATUS_MS) {
     status_ms = now_ms;
@@ -540,6 +708,11 @@ void app_loop(uint64_t now_ms) {
       rfid_poll(now_ms);
       if (mode == APP_MODE_BATCH) batch_collect(now_ms);
       if (!button_is_down(read_button)) finish_reading(now_ms);
+      break;
+
+    case APP_UPLOAD:
+      // Novo clique em C, duplo clique ou aperto longo durante o envio: ignorado.
+      upload_loop(now_ms);
       break;
 
     case APP_SYNC:
@@ -559,6 +732,17 @@ void app_loop(uint64_t now_ms) {
         start_sync(gesture_mode == APP_MODE_BATCH, now_ms);
         break;
       }
+      if (gesture == GESTURE_API) {
+        start_upload(now_ms);
+        break;
+      }
+      if (gesture == GESTURE_CLEAR) {
+        // Apaga tudo o que esta pendente, nas duas filas (Bluetooth e API). As tags podem ser lidas de novo.
+        PRINTF("STORAGE: %u pending readings erased by A+B\n", storage_count());
+        storage_clear();
+        show_message("Memória Limpa", now_ms);
+        break;
+      }
 
       if (state != APP_READY) {
         if (now_ms - state_since_ms >= APP_RESULT_MS) show_ready(now_ms);
@@ -566,7 +750,7 @@ void app_loop(uint64_t now_ms) {
       }
 
       // Mantem o aviso das pendentes atualizado (confirmacao atrasada, por exemplo)
-      if (ready_hint != pending_of(false) * (STORAGE_CAPACITY + 1) + pending_of(true)) show_ready(now_ms);
+      if (ready_hint != pending_key()) show_ready(now_ms);
       break;
   }
 }

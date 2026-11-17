@@ -3,9 +3,14 @@
 
 #include "../../main.h"
 
-// Fila de pendencias: leituras aguardando transmissao ou confirmacao do
-// celular, gravada na memoria permanente (sobrevive a desligar o aparelho).
-// Cada leitura sai da fila, individualmente, assim que o celular a confirma.
+// Leituras pendentes, gravadas na memoria permanente (sobrevivem a desligar o
+// aparelho). Ha duas filas independentes sobre os mesmos registros:
+//
+// - Bluetooth: a leitura esta pendente enquanto STORAGE_FLAG_BLE_DONE = 0.
+// - API (Wi-Fi): a leitura esta pendente enquanto STORAGE_FLAG_API_DONE = 0.
+//
+// Confirmar por um canal nao mexe no outro. O registro so sai da memoria
+// quando os dois canais confirmaram.
 //
 // - ESP32: arquivos no LittleFS (particao "spiffs" da tabela default_16MB).
 // - Simulador de PC: arquivos na pasta de onde o simulador foi aberto.
@@ -20,6 +25,8 @@
 #define STORAGE_FLAG_CLOCK_SET 0x01  // timestamp veio do relogio acertado pelo celular
 #define STORAGE_FLAG_BATCH     0x02  // leitura feita no modo em lote (botao B)
 #define STORAGE_FLAG_SENT      0x04  // ja transmitida ao aplicativo, ainda sem confirmacao
+#define STORAGE_FLAG_BLE_DONE  0x08  // fila do Bluetooth: confirmada pelo celular (ou cancelada)
+#define STORAGE_FLAG_API_DONE  0x10  // fila da API: confirmada pela API (HTTP 2xx)
 
 typedef struct {
   uint16_t seq;
@@ -55,7 +62,16 @@ bool storage_remove(uint16_t seq);
 // Marca a leitura como transmitida (STORAGE_FLAG_SENT), tambem no arquivo.
 void storage_mark_sent(uint16_t seq);
 
-// Retira as leituras da sessao que ainda nao foram transmitidas. Devolve quantas.
+// Um canal confirmou a leitura (`done_flag` = STORAGE_FLAG_BLE_DONE ou
+// STORAGE_FLAG_API_DONE). Devolve true se, com isso, a leitura saiu da memoria
+// (os dois canais ja confirmaram).
+bool storage_complete(uint16_t seq, uint8_t done_flag);
+
+// Apaga todas as leituras pendentes, confirmadas ou nao. O numero sequencial continua.
+void storage_clear();
+
+// Cancela, na fila do Bluetooth, as leituras da sessao que ainda nao foram
+// transmitidas. Elas continuam pendentes para a API. Devolve quantas.
 uint16_t storage_cancel_session(uint8_t session);
 
 // Sessao atual e o modo dela (0 = nenhuma ainda).
@@ -64,8 +80,9 @@ void storage_session_save(uint8_t session, uint8_t mode);
 
 uint16_t storage_count();
 
-// Quantas das pendentes sao do modo em lote (STORAGE_FLAG_BATCH).
-uint16_t storage_count_batch();
+// Quantas leituras tem (flags & mask) == value. Exemplo: pendentes da API =
+// storage_count_where(STORAGE_FLAG_API_DONE, 0).
+uint16_t storage_count_where(uint8_t mask, uint8_t value);
 
 // A memoria permanente esta funcionando.
 bool storage_persistent();

@@ -73,7 +73,7 @@ if(USE_FREERTOS)
     list(APPEND MAIN_SOURCES src_hal/freertos_main.c src_hal/freertos/freertos_posix_port.c ${FREERTOS_SOURCES})
     list(APPEND MAIN_LIBS freertos_config freertos_kernel)
 else()
-    list(APPEND MAIN_SOURCES main.cpp src/ble/ble.cpp src/buttons/buttons.cpp src/display/display.cpp src/feedback/feedback.cpp src/power/power.cpp src/rfid/rfid.cpp src/rfid/rfid_real.cpp src/rfid/rfid_sim.cpp src/state/app.cpp src/storage/storage.cpp)
+    list(APPEND MAIN_SOURCES main.cpp src/ble/ble.cpp src/buttons/buttons.cpp src/display/display.cpp src/feedback/feedback.cpp src/net/net.cpp src/power/power.cpp src/rfid/rfid.cpp src/rfid/rfid_real.cpp src/rfid/rfid_sim.cpp src/state/app.cpp src/storage/storage.cpp)
 endif()
 
 

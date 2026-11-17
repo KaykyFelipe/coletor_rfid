@@ -66,4 +66,13 @@ bool ble_poll_event(ble_event_t &event);
 // Atualiza a caracteristica de status (bateria %, leituras pendentes e tags no historico).
 void ble_set_status(uint8_t battery_percent, uint16_t pending, uint16_t history);
 
+// Desliga o Bluetooth por inteiro (o celular desconecta) para liberar memoria:
+// com Bluetooth e Wi-Fi juntos nao sobra memoria para o HTTPS da API.
+void ble_suspend();
+
+// Religa o Bluetooth e volta a anunciar; o celular pareado reconecta sozinho.
+void ble_resume();
+
+bool ble_suspended();
+
 #endif // BLE_H

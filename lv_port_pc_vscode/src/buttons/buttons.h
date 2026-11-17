@@ -9,8 +9,10 @@
 #define BUTTON_SINGLE BUTTON_A
 #define BUTTON_BATCH BUTTON_B
 
-// C (o antigo "Ok", laranja, GPIO 33) nao tem funcao durante o uso. Continua
-// acordando o aparelho do deep sleep e acendendo a tela, como qualquer botao.
+// C (o antigo "Ok", laranja, GPIO 33): um clique envia as leituras pendentes
+// para a API da Ativa pelo Wi-Fi. Nao le tags. Continua acordando o aparelho
+// do deep sleep.
+#define BUTTON_API BUTTON_C
 
 #define BUTTONS_COUNT 3
 #define BUTTONS_DEBOUNCE_MS 30

@@ -98,9 +98,11 @@ O valor é conferido a cada 5 segundos e notificado quando muda.
 | --- | --- | --- |
 | A | **Leitura individual.** Lê as tags ao alcance enquanto pressionado. Ao soltar, registra **uma** leitura: a tag inédita que respondeu mais vezes. | Sincroniza as leituras **individuais** pendentes. |
 | B | **Leitura em lote.** Registra **toda** tag inédita que aparecer enquanto pressionado, uma leitura para cada. Soltar pausa; segurar B de novo continua a mesma sessão. | Sincroniza as leituras **em lote** pendentes. |
-| C | Nenhuma ação. | Nenhuma ação. |
+| C | Nenhuma ação. | Nenhuma ação. Um clique simples envia as pendentes para a API da Ativa pelo Wi-Fi (não usa Bluetooth; ver o README). |
 
-O botão C só acorda o aparelho do deep sleep e acende a tela apagada, como qualquer botão.
+O botão C não participa do Bluetooth. Ele também acorda o aparelho do deep sleep.
+
+**A e B juntos por 3 segundos** apagam todas as leituras guardadas, dos dois modos e das duas filas (Bluetooth e API), sem pergunta. Elas nunca chegam ao aplicativo; os números `seq` delas ficam sem uso e as tags podem ser lidas de novo.
 
 **Como o coletor distingue os acionamentos.** O botão pressionado por 0,4 s ou mais é uma pressão longa e começa a leitura. Solto antes disso, é um clique curto. Dois cliques curtos do mesmo botão, com no máximo 0,35 s entre soltar o primeiro e apertar o segundo, são um duplo clique. Um clique curto sozinho não faz nada; um aperto longo nunca conta como clique. Os dois tempos são constantes em `src/state/app.h` (`APP_LONG_PRESS_MS` e `APP_DOUBLE_CLICK_MS`).
 
@@ -112,7 +114,7 @@ Ao encerrar uma sessão por troca de modo, o coletor trata as leituras dela assi
 | --- | --- |
 | Confirmada pelo celular | Já saiu da fila. |
 | Transmitida, ainda sem confirmação | Continua na fila e sai na próxima sincronização daquele modo. |
-| Ainda não transmitida | **É cancelada**: sai da fila. A tag pode ser lida de novo. |
+| Ainda não transmitida | **É cancelada** na fila do Bluetooth: nunca chega ao aplicativo. Continua pendente na fila da API. |
 
 > **Atenção:** como nada é transmitido antes do duplo clique, ler com o outro botão **sem sincronizar antes** apaga todas as leituras pendentes do modo anterior. A ordem de uso é: ler, sincronizar com dois cliques e só então trocar de modo.
 
@@ -134,9 +136,9 @@ Um novo duplo clique ou um aperto longo durante a sincronização é ignorado.
 
 ## Controle de duplicidade
 
-O bloqueio de repetidas vale **só para as leituras pendentes**: uma tag que está na fila, aguardando transmissão ou confirmação, não é registrada de novo. Isso continua valendo depois de desligar o aparelho ou de reconectar o Bluetooth, porque a fila fica em memória permanente.
+O bloqueio de repetidas vale **só para as leituras ainda guardadas**: uma tag que está pendente em qualquer uma das duas filas não é registrada de novo. Isso continua valendo depois de desligar o aparelho ou de reconectar o Bluetooth, porque a fila fica em memória permanente.
 
-**Depois de descarregada no celular, a tag pode ser lida de novo.** A confirmação retira a leitura da fila e, com isso, libera a tag. Não é preciso limpar nada.
+**A fila do Bluetooth e a fila da API são independentes.** A confirmação do aplicativo retira a leitura só da fila do Bluetooth; o envio pela API (botão C) retira só da fila da API. A leitura sai da memória, e a tag pode ser lida de novo, quando os dois canais confirmaram ou quando o operador limpa a memória com A + B.
 
 Durante a leitura, as tags repetidas são ignoradas. Se só havia repetidas ao alcance, a tela mostra "Já registrada" com o final da tag.
 
@@ -144,7 +146,7 @@ Consequências para o aplicativo:
 
 - A mesma tag pode chegar em mais de uma leitura, cada uma com seu `seq`: é o operador lendo de novo um equipamento já descarregado. Se isso não for desejado, o controle fica por conta do aplicativo.
 - O reenvio de uma leitura ainda não confirmada vem sempre com o `seq` e a sessão originais; é por eles que o aplicativo reconhece a leitura já processada.
-- Uma leitura cancelada por troca de modo nunca foi transmitida; a mesma tag pode aparecer depois em uma leitura nova, com outro `seq`.
+- Uma leitura cancelada por troca de modo nunca chega ao aplicativo; depois de sair da memória, a mesma tag pode aparecer em uma leitura nova, com outro `seq`.
 
 ## Fila de pendências
 
